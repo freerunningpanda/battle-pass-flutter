@@ -1,413 +1,199 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../exports.dart';
 
+/// Лента наград: премиум-тизер (пока премиум не куплен) → уровни → карточка
+/// следующего сезона (см. [TrackAppearance.seasonEndTeaser]), поверх —
+/// стрелки и плавающее превью ближайшего юбилейного уровня.
 class RewardsTrack extends StatefulWidget {
   const RewardsTrack({
     required this.season,
+    required this.appearance,
     required this.onClaim,
     required this.onUnlockPremium,
-    this.highlightMaxLevelMilestone = false,
-    this.hideGiftBadge = false,
-    this.simplifyMilestonePreview = false,
-    this.startScrolledToEnd = false,
-    this.showSeasonEndTeaser = false,
-    this.showSeasonEndTeaserRequiresPremium = false,
-    this.highlightedLevelNumber,
-    this.hideMilestonePremiumBadge = false,
-    this.hideCarouselPremiumBadge = false,
-    this.goldGradientLevelNumber,
     super.key,
   });
 
   final BattlePassSeason season;
+  final TrackAppearance appearance;
   final void Function(int levelNumber) onClaim;
   final VoidCallback onUnlockPremium;
-
-  /// Трек открывается сразу у последнего элемента списка — только в
-  /// сценарии "Конец наград (Куплен премиум)" (см. battle_pass_screen.dart).
-  /// Явный флаг, а не вывод из season (например season.levels.every
-  /// (claimed)): season здесь та же, что у premiumUnlockedWithReward
-  /// (тот же seasonId/currentLevel), где скроллить к концу не нужно.
-  final bool startScrolledToEnd;
-
-  /// Ромб плавающего превью юбилейного уровня красится в
-  /// AppColors.milestoneDiamondMaxLevel вместо обычного серого — только в
-  /// сценарии "Макс. уровень / Много наград" (см. battle_pass_screen.dart).
-  final bool highlightMaxLevelMilestone;
-
-  /// Значок подарка убран у всех обычных плиток трека — только в сценарии
-  /// "Премиум куплен / награда" (см. battle_pass_screen.dart).
-  final bool hideGiftBadge;
-
-  /// У плавающего превью юбилейного уровня убрана корона (premium.svg), а
-  /// рамка всегда белая (#E9E9F3, 4px) вместо оранжевой "к клейму готово" —
-  /// независимо от того, забран сам уровень или нет. Только в сценарии
-  /// "Battle Pass завершен" (см. battle_pass_screen.dart).
-  final bool simplifyMilestonePreview;
-
-  /// Карточка "следующий сезон" в самом конце трека (после последнего
-  /// уровня) — только в сценариях "Конец наград (Куплен/Не куплен
-  /// премиум)" (см. battle_pass_screen.dart).
-  final bool showSeasonEndTeaser;
-
-  /// Текст карточки "следующий сезон" — "нужна прокачка" вместо "откроются
-  /// после уровня N". Только в сценарии "Конец наград (Не куплен премиум)"
-  /// (см. battle_pass_screen.dart).
-  final bool showSeasonEndTeaserRequiresPremium;
-
-  /// Номер уровня, чья плитка получает рамку 4px solid #E9E9F3 и значок
-  /// подарка независимо от hideGiftBadge — точечно 97-й уровень в сценарии
-  /// "Конец наград (Куплен премиум)" (см. battle_pass_screen.dart). `null`
-  /// (по умолчанию) — ни одна плитка не подсвечена.
-  final int? highlightedLevelNumber;
-
-  /// Плавающее превью юбилейного уровня — без короны (premium.svg), но с
-  /// обычным (не всегда белым) цветом рамки, в отличие от
-  /// simplifyMilestonePreview. Только в сценарии "Конец наград (Куплен
-  /// премиум)" (см. battle_pass_screen.dart).
-  final bool hideMilestonePremiumBadge;
-
-  /// Значок короны (premium.svg) убран у всех элементов карусели — обычных
-  /// плиток трека и премиум-тизера в начале (PremiumTeaserCluster). Только
-  /// в сценарии "Конец наград (Не куплен премиум)" (см.
-  /// battle_pass_screen.dart).
-  final bool hideCarouselPremiumBadge;
-
-  /// Номер уровня, чья плитка красится в rewardTileGoldGradient независимо
-  /// от rarity/премиум-апгрейда — точечно 100-й уровень сценария "Конец
-  /// наград (Не куплен премиум)" (см. battle_pass_screen.dart): его rarity
-  /// и так 'legendary' (золотой), но premiumOwned: false перекрашивает его
-  /// в фиолетовый "тут премиум" без этого оверрайда. `null` (по умолчанию)
-  /// — ни одна плитка не переопределена.
-  final int? goldGradientLevelNumber;
 
   @override
   State<RewardsTrack> createState() => _RewardsTrackState();
 }
 
+/// Всё, что зависит от позиции скролла. Record сравнивается по значению —
+/// ValueNotifier уведомляет только когда что-то из этого реально поменялось.
+typedef _ScrollUi = ({
+  bool scrolled,
+  bool pastFirstItem,
+  bool atEnd,
+  int? nextMilestone,
+});
+
 class _RewardsTrackState extends State<RewardsTrack> {
+  /// Шаг уровня: плитка (242) + стрелка-разделитель (12). Все уровни одной
+  /// ширины (SliverFixedExtentList), поэтому смещение любого уровня и
+  /// maxScrollExtent известны точно, а не оцениваются по построенным детям.
+  static const double _levelExtent =
+      RewardCarouselTile.defaultWidth + _TrackSeparator.width;
+
+  static const _milestoneStep = 10;
+
+  /// Сколько последних плиток должно выйти из-под превью, прежде чем оно
+  /// вернётся при обратном скролле от конца трека.
+  static const _milestoneReturnLevels = 3;
+
+  static const _arrowScrollLevels = 3;
+
+  /// Доля ширины трека, на которой гаснут обычные края.
+  static const _edgeFadeStop = 0.07;
+
+  /// Ширина перехода от чётких плиток к погасшим перед превью юбилейного
+  /// уровня.
+  static const _milestoneFadeWidth = 150.0;
+
+  /// Расстояние от правого края трека до середины стрелки к юбилейному
+  /// уровню — отсюда плитки уже полностью погашены.
+  static const _milestoneArrowMidpoint = _MilestonePreview._cardSize + 55;
+
   final _controller = ScrollController();
+  final _scrollUi = ValueNotifier<_ScrollUi>((
+    scrolled: false,
+    pastFirstItem: false,
+    atEnd: false,
+    nextMilestone: null,
+  ));
 
-  // Реальный шаг между соседними уровнями в списке: ширина плитки (242,
-  // RewardCarouselTile.width по умолчанию) плюс ширина разделителя-стрелки
-  // между ними (~12, см. _TrackSeparator/_LevelTrackNode._diamondStride в
-  // reward_tile.dart — те же 254). Заниженное значение почти не заметно на
-  // первом прыжке (к 10-му уровню), но накапливается с каждым следующим
-  // юбилейным — к 40-му промах достигал (254-170)*39 ≈ 3276px, и прыжок
-  // останавливался далеко до цели.
-  static const double _tileExtent = 254;
+  double get _leadingExtent => widget.season.premiumOwned
+      ? 0
+      : PremiumTeaserCluster.width + _TrackSeparator.width;
 
-  bool _showLeftArrow = false;
-  bool _showRightArrow = true;
-  bool _hasScrolled = false;
-  int? _nextMilestone;
+  /// Стрелка "назад" появляется, когда первый элемент ушёл за левый край.
+  double get _firstItemExtent => widget.season.premiumOwned
+      ? _levelExtent
+      : PremiumTeaserCluster.width / 3;
 
-  /// Ширина первого элемента списка — стрелка "назад" появляется, только
-  /// когда он целиком уходит за левый край экрана.
-  double get _firstItemExtent =>
-      widget.season.premiumOwned ? _tileExtent : PremiumTeaserCluster.width / 3;
-
-  /// Смещение скролла, на котором начинается плитка уровня — та же
-  /// приближённая арифметика, что уже использует `_scrollToCurrent`.
-  double _offsetForLevel(int levelNumber) {
-    final leading = widget.season.premiumOwned
-        ? 0.0
-        : PremiumTeaserCluster.width;
-    return leading + (levelNumber - 1) * _tileExtent;
-  }
-
-  /// Половина разницы между шириной вьюпорта и шагом плитки — на столько
-  /// _scrollToMilestone недокручивает от _offsetForLevel, чтобы плитка
-  /// вставала по центру, а не впритык к левому краю. Тот же порог нужен и
-  /// здесь: иначе после центрированного прыжка на уровень m «пройденным»
-  /// он не считается (offset после прыжка меньше offsetForLevel(m)), ромб
-  /// предпросмотра залипает и дальнейшие прыжки не работают.
-  double get _viewportHalfGap {
-    if (!_controller.hasClients) return 0;
-    return (_controller.position.viewportDimension - _tileExtent) / 2;
-  }
-
-  double _centeredOffsetForLevel(int levelNumber) =>
-      _offsetForLevel(levelNumber) - _viewportHalfGap;
-
-  /// Идёт программный прыжок скролла (_scrollToCurrent) — на время самой
-  /// анимации превью юбилейного уровня не пересчитывается вовсе, а не
-  /// мелькает по каждому пройденному уровню (10, 20…) на пути к цели. Только
-  /// у "Конец наград (Куплен премиум)" (см. RewardsTrack.startScrolledToEnd)
-  /// прыжок достаточно длинный, чтобы это было заметно — у остальных
-  /// сценариев короткий прыжок ни один порог юбилейного уровня не пересекает,
-  /// так что флаг для них по факту не влияет на видимый результат.
-  bool _isAutoScrolling = false;
-
-  /// Ближайший ещё не пройденный юбилейный уровень (10, 20, 30…) — пока он
-  /// не проскроллен в начало трека, к нему ведут стрелка вправо и оверлей.
-  int? _computeNextMilestone() {
-    if (_isAutoScrolling) return null;
-    final maxLevel = widget.season.levels.length;
-    // Центрированный порог последнего уровня физически недостижим — под
-    // ним нет содержимого, чтобы дотянуть его до середины вьюпорта, и
-    // список упирается в maxScrollExtent раньше. Без клампа порог остаётся
-    // недостижим сколько ни скролль — превью 40-го уровня зависает навсегда
-    // и закрывает собой финальную плитку. Клампим порог до реально
-    // доступного конца скролла: дошли до конца — уровень пройден.
-    final maxScrollExtent = _controller.hasClients
-        ? _controller.position.maxScrollExtent
-        : double.infinity;
-    int? candidate;
-    for (var m = 10; m <= maxLevel; m += 10) {
-      final threshold = _centeredOffsetForLevel(m).clamp(0, maxScrollExtent);
-      if (_controller.offset < threshold) {
-        candidate = m;
-        break;
-      }
-    }
-    if (candidate == null) return null;
-    // Превью только что было скрыто (весь трек пройден или конец
-    // автоскролла) — при обратном скролле оно не должно вспыхивать сразу же
-    // по достижении 100, 99 или 98 уровня: сначала должен показаться 97-й.
-    // Порог самого найденного кандидата (100) при этом не трогаем — иначе
-    // вместо него возвращался бы более ранний юбилейный уровень (10), у
-    // которого порог тоже пройден. Только в сценарии "Конец наград (Куплен
-    // премиум)" (см. showSeasonEndTeaser) — там это реально происходит
-    // (startScrolledToEnd долистывает до самого конца).
-    if (widget.showSeasonEndTeaser &&
-        _nextMilestone == null &&
-        _controller.offset >=
-            _centeredOffsetForLevel(97).clamp(0, maxScrollExtent)) {
-      return null;
-    }
-    return candidate;
+  /// Смещение, при котором плитка уровня стоит по центру вьюпорта (в
+  /// пределах доступного скролла).
+  double _centeredOffset(int level) {
+    final position = _controller.position;
+    final offset =
+        _leadingExtent +
+        (level - 1) * _levelExtent -
+        (position.viewportDimension - _levelExtent) / 2;
+    return offset.clamp(0, position.maxScrollExtent);
   }
 
   @override
   void initState() {
     super.initState();
-    _controller.addListener(_onScroll);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollToCurrent();
-      if (mounted) {
-        setState(() {
-          _nextMilestone = _computeNextMilestone();
-          _showRightArrow = !_atScrollEnd;
-        });
-      }
-    });
-  }
-
-  /// Правый край списка физически достигнут — стрелка вправо (та, что ведёт
-  /// дальше по треку, а не к юбилейному уровню — см. build) дальше скроллить
-  /// уже некуда, поэтому прячется.
-  bool get _atScrollEnd =>
-      _controller.hasClients &&
-      _controller.offset >= _controller.position.maxScrollExtent - 1;
-
-  void _onScroll() {
-    final showLeftArrow = _controller.offset >= _firstItemExtent;
-    final showRightArrow = !_atScrollEnd;
-    final hasScrolled = _controller.offset > 0;
-    final nextMilestone = _computeNextMilestone();
-    if (showLeftArrow != _showLeftArrow ||
-        showRightArrow != _showRightArrow ||
-        hasScrolled != _hasScrolled ||
-        nextMilestone != _nextMilestone) {
-      setState(() {
-        _showLeftArrow = showLeftArrow;
-        _showRightArrow = showRightArrow;
-        _hasScrolled = hasScrolled;
-        _nextMilestone = nextMilestone;
-      });
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant RewardsTrack oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.season.seasonId != widget.season.seasonId ||
-        oldWidget.season.currentLevel != widget.season.currentLevel ||
-        oldWidget.startScrolledToEnd != widget.startScrolledToEnd) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToCurrent());
-    }
-  }
-
-  void _scrollToCurrent() {
-    if (!_controller.hasClients) return;
-    // Пока премиум не куплен, трек должен открываться с самого начала —
-    // с тизером премиум-наград, а не сразу проскроленным вперёд. Кроме
-    // startScrolledToEnd ("Конец наград" — и с премиумом, и без): туда
-    // нужно долистать до конца независимо от того, куплен премиум или нет.
-    if (!widget.season.premiumOwned && !widget.startScrolledToEnd) return;
-    // "Конец наград" — сразу к последнему элементу; иначе — смещаемся
-    // только к 2-му, тизера уже нет, но и к текущему уровню, который может
-    // быть далеко, сразу прыгать не нужно.
-    final target = widget.startScrolledToEnd
-        ? _controller.position.maxScrollExtent
-        : _tileExtent;
-    // Только у startScrolledToEnd прыжок достаточно длинный, чтобы по пути
-    // пересечь пороги нескольких юбилейных уровней подряд — без подавления
-    // превью мелькало бы "10, 20, 30…" за одну 500-мс анимацию. У короткого
-    // прыжка (_tileExtent) порог первого уровня всё равно не пересекается,
-    // так что для остальных сценариев подавлять нечего — флаг не трогаем.
-    if (widget.startScrolledToEnd) _isAutoScrolling = true;
-    _controller
-        .animateTo(
-          target.clamp(0, _controller.position.maxScrollExtent),
-          duration: const Duration(milliseconds: 500),
-          curve: Curves.easeOutCubic,
-        )
-        .then((_) {
-          if (!mounted) return;
-          if (widget.startScrolledToEnd) {
-            // maxScrollExtent сразу после animateTo — ещё не окончательное
-            // значение (см. _settleAtEnd), а у длинного трека с большим
-            // ведущим виджетом (PremiumTeaserCluster) может застрять
-            // заниженным — одного jumpTo(maxScrollExtent) недостаточно.
-            _settleAtEnd();
-            return;
-          }
-          setState(() {
-            _isAutoScrolling = false;
-            _nextMilestone = _computeNextMilestone();
-          });
-        });
-  }
-
-  /// maxScrollExtent, прочитанный сразу после animateTo, — лишь оценка:
-  /// SliverList без itemExtent экстраполирует её по уже построенным
-  /// (видимым + в пределах cacheExtent) детям, а не по всем ~100 плиткам
-  /// трека сразу. У "Не куплен премиум" самый первый построенный элемент —
-  /// PremiumTeaserCluster шириной 676 вместо обычных ~254 — сильно
-  /// перекашивает эту оценку, и она застревает заниженной: ClampingScroll
-  /// Physics каждый кадр обрезает офсет по текущей (ещё не окончательной)
-  /// оценке, а раз офсет не растёт — Sliver не строит следующих детей, и
-  /// оценка не уточняется дальше. Поэтому коррекция не одноразовая: прыгаем
-  /// на текущий maxScrollExtent и на следующем кадре проверяем, вырос ли
-  /// он — пока растёт, кадр за кадром достраиваются новые плитки; как
-  /// только два кадра подряд дают одно и то же значение, конец
-  /// действительно достигнут.
-  void _settleAtEnd([double? previousExtent]) {
-    if (!mounted || !_controller.hasClients) {
-      _isAutoScrolling = false;
-      return;
-    }
-    final extent = _controller.position.maxScrollExtent;
-    _controller.jumpTo(extent);
-    if (previousExtent != null && extent <= previousExtent + 0.5) {
-      setState(() {
-        _isAutoScrolling = false;
-        _nextMilestone = _computeNextMilestone();
-      });
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _settleAtEnd(extent));
-  }
-
-  void _scrollToMilestone(int levelNumber) {
-    if (!_controller.hasClients) return;
-    // Целевая плитка встаёт примерно по центру видимой области трека, а не
-    // впритык к её левому краю (см. _centeredOffsetForLevel — тот же порог
-    // использует _computeNextMilestone, иначе после прыжка ромб предпросмотра
-    // не продвигается дальше).
-    final target = _centeredOffsetForLevel(levelNumber);
-    _controller.animateTo(
-      target.clamp(0, _controller.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  void _scrollBy(double delta) {
-    if (!_controller.hasClients) return;
-    _controller.animateTo(
-      (_controller.offset + delta).clamp(
-        0,
-        _controller.position.maxScrollExtent,
-      ),
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+    _controller.addListener(_updateScrollUi);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToStart());
   }
 
   @override
   void dispose() {
-    _controller.removeListener(_onScroll);
     _controller.dispose();
+    _scrollUi.dispose();
     super.dispose();
   }
 
-  /// Плашки трека уходят под стрелки, а не обрезаются по их краю — здесь
-  /// маскируем края градиентом в прозрачность вместо жёсткого кропа.
-  /// Включается только после начала скролла (в исходном положении первая
-  /// плашка ничем не перекрыта и обрезать её нечем), но ShaderMask остаётся
-  /// в дереве всегда — если убирать его условно, ListView под ним
-  /// пересоздаётся вместе со Scrollable и роняет уже начатый жест скролла.
-  Gradient get _edgeFadeGradient {
-    final colors = context.theme.appColors.mainColors;
-    return LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      stops: const [0.0, 0.07, 0.93, 1.0],
-      colors: [
-        colors.appColorTransparent,
-        colors.appColorBlack,
-        colors.appColorBlack,
-        colors.appColorTransparent,
-      ],
-    );
-  }
-
-  Gradient get _noFadeGradient {
-    final black = context.theme.appColors.mainColors.appColorBlack;
-    return LinearGradient(colors: [black, black]);
-  }
-
-  /// Тот же левый fade, что у `_edgeFadeGradient`, но без правого — только
-  /// для карточки "следующий сезон" (см. showSeasonEndTeaser) на самом конце
-  /// трека: она последний элемент, дальше скроллить некуда, поэтому её
-  /// рамка не должна частично гаснуть у правого края.
-  Gradient get _leftOnlyFadeGradient {
-    final colors = context.theme.appColors.mainColors;
-    return LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
-      stops: const [0.0, 0.07],
-      colors: [colors.appColorTransparent, colors.appColorBlack],
-    );
-  }
-
-  /// Расстояние от правого края трека до середины стрелки, ведущей к
-  /// юбилейному уровню (см. её же `right`/паддинг ниже в build) — начиная
-  /// отсюда плитки уже не должны рендериться вовсе.
-  static double get _milestoneArrowMidpoint => _MilestonePreview._cardSize + 55;
-
-  /// Плитки трека гаснут (alpha 0) уже на середине стрелки, а не жёстко
-  /// подрезаются под неё — те же стопы, что и обычный `_edgeFadeGradient`,
-  /// но правый край выражен в пикселях от `_milestoneArrowMidpoint`, а не
-  /// фиксированным процентом ширины трека.
-  Gradient _trackFadeGradient(double width) {
-    if (_nextMilestone == null) {
-      if (!_hasScrolled) return _noFadeGradient;
-      if (widget.showSeasonEndTeaser && _atScrollEnd) {
-        return _leftOnlyFadeGradient;
-      }
-      return _edgeFadeGradient;
+  /// Начальная позиция: "Конец наград" — сразу у конца трека; с купленным
+  /// премиумом — на уровень вперёд; без премиума — с начала, с тизера.
+  void _scrollToStart() {
+    if (!mounted || !_controller.hasClients) return;
+    if (widget.appearance.startScrolledToEnd) {
+      _controller.jumpTo(_controller.position.maxScrollExtent);
+    } else if (widget.season.premiumOwned) {
+      _animateTo(_levelExtent);
     }
-    const transitionWidth = 150.0;
-    final fadeEndStop = 1 - _milestoneArrowMidpoint / width;
-    final fadeStartStop =
-        1 - (_milestoneArrowMidpoint + transitionWidth) / width;
+    _updateScrollUi();
+  }
+
+  void _updateScrollUi() {
+    final position = _controller.position;
+    final offset = position.pixels;
+    _scrollUi.value = (
+      scrolled: offset > 0,
+      pastFirstItem: offset >= _firstItemExtent,
+      atEnd: offset >= position.maxScrollExtent - 1,
+      nextMilestone: _nextMilestone(offset),
+    );
+  }
+
+  /// Ближайший юбилейный уровень (10, 20…), ещё не доскролленный до центра.
+  int? _nextMilestone(double offset) {
+    final levelCount = widget.season.levels.length;
+    int? next;
+    for (var m = _milestoneStep; m <= levelCount; m += _milestoneStep) {
+      if (offset < _centeredOffset(m)) {
+        next = m;
+        break;
+      }
+    }
+    // Превью, скрытое у конца трека, при обратном скролле возвращается не
+    // сразу — иначе оно тут же накрыло бы собой последние плитки.
+    final returnLevel = levelCount - _milestoneReturnLevels;
+    if (next != null &&
+        _scrollUi.value.nextMilestone == null &&
+        returnLevel > 0 &&
+        offset >= _centeredOffset(returnLevel)) {
+      return null;
+    }
+    return next;
+  }
+
+  void _animateTo(
+    double offset, {
+    Duration duration = const Duration(milliseconds: 500),
+    Curve curve = Curves.easeOutCubic,
+  }) {
+    if (!_controller.hasClients) return;
+    _controller.animateTo(
+      offset.clamp(0, _controller.position.maxScrollExtent),
+      duration: duration,
+      curve: curve,
+    );
+  }
+
+  void _scrollToMilestone(int level) => _animateTo(_centeredOffset(level));
+
+  void _scrollByLevels(int count) => _animateTo(
+    _controller.offset + count * _levelExtent,
+    duration: const Duration(milliseconds: 300),
+    curve: Curves.easeOut,
+  );
+
+  /// Края ленты гаснут в прозрачность, а не обрезаются под стрелками. До
+  /// первого скролла левый край не гаснет — первая плитка ничем не
+  /// перекрыта; у карточки следующего сезона не гаснет правый — дальше
+  /// скроллить некуда.
+  Gradient _fadeGradient(_ScrollUi ui, double width) {
     final colors = context.theme.appColors.mainColors;
+    final leftFadeEnd = ui.scrolled ? _edgeFadeStop : 0.0;
+    final double rightFadeStart;
+    final double rightFadeEnd;
+    if (ui.nextMilestone != null) {
+      rightFadeEnd = 1 - _milestoneArrowMidpoint / width;
+      rightFadeStart =
+          1 - (_milestoneArrowMidpoint + _milestoneFadeWidth) / width;
+    } else if (!ui.scrolled ||
+        (ui.atEnd && widget.appearance.seasonEndTeaser != null)) {
+      rightFadeStart = 1;
+      rightFadeEnd = 1;
+    } else {
+      rightFadeStart = 1 - _edgeFadeStop;
+      rightFadeEnd = 1;
+    }
     return LinearGradient(
-      begin: Alignment.centerLeft,
-      end: Alignment.centerRight,
       stops: [
-        0.0,
-        _hasScrolled ? 0.07 : 0.0,
-        fadeStartStop.clamp(0.0, 1.0),
-        fadeEndStop.clamp(0.0, 1.0),
+        0,
+        leftFadeEnd,
+        rightFadeStart.clamp(0, 1),
+        rightFadeEnd.clamp(0, 1),
       ],
       colors: [
         colors.appColorTransparent,
@@ -420,236 +206,173 @@ class _RewardsTrackState extends State<RewardsTrack> {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.theme.appColors.mainColors;
+    final appearance = widget.appearance;
 
     const trackLeft = 346.0;
     const trackRight = 80.0;
     const trackBottom = 24.0;
-    const blurZoneWidth = 150.0;
-    const blurSigma = 12.0;
     const arrowVerticalOffset = 32.0;
     const milestoneArrowGap = 13.0;
     const arrowButtonInset = 8.0;
-    const arrowScrollTileCount = 3;
 
     return Positioned(
       left: trackLeft,
       right: trackRight,
       bottom: trackBottom,
       height: AppSizes.verticalSize300,
-      // Clip.none — превью юбилейного уровня выше обычной плитки (300 против
-      // 240) и растёт вверх за пределы этой области, чтобы его собственный
-      // ромб с номером остался на одной высоте с остальными (см.
-      // _MilestonePreview).
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          _TrackList(
-            season: widget.season,
-            controller: _controller,
-            onClaim: widget.onClaim,
-            onUnlockPremium: widget.onUnlockPremium,
-            hideGiftBadge: widget.hideGiftBadge,
-            highlightedLevelNumber: widget.highlightedLevelNumber,
-            hideCarouselPremiumBadge: widget.hideCarouselPremiumBadge,
-            goldGradientLevelNumber: widget.goldGradientLevelNumber,
-            showSeasonEndTeaser: widget.showSeasonEndTeaser,
-            showSeasonEndTeaserRequiresPremium:
-                widget.showSeasonEndTeaserRequiresPremium,
-            fadeGradient: _trackFadeGradient,
-          ),
-          if (_nextMilestone != null)
-            // Плитки трека, которые превью юбилейного уровня перекрывает
-            // собой, не подрезаются жёстко — сами гаснут (alpha 0) уже на
-            // середине стрелки (см. _trackFadeGradient), а блюр здесь лишь
-            // смягчает переход между чёткими плитками и уже погасшими:
-            // сам невидим по краям зоны и виден только в середине перехода.
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              width: _milestoneArrowMidpoint + blurZoneWidth,
-              child: ShaderMask(
-                shaderCallback: (bounds) => LinearGradient(
-                  stops: const [0.0, 0.35, 0.7, 1.0],
-                  colors: [
-                    colors.appColorTransparent,
-                    colors.appColorBlack,
-                    colors.appColorBlack,
-                    colors.appColorTransparent,
-                  ],
-                ).createShader(bounds),
-                blendMode: BlendMode.dstIn,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(
-                      sigmaX: blurSigma,
-                      sigmaY: blurSigma,
-                    ),
-                    child: const SizedBox.expand(),
+      child: ValueListenableBuilder<_ScrollUi>(
+        valueListenable: _scrollUi,
+        // Сама лента от позиции скролла не зависит и при её смене не
+        // перестраивается — только стрелки, превью и маска краёв.
+        child: _TrackList(
+          controller: _controller,
+          season: widget.season,
+          appearance: appearance,
+          levelExtent: _levelExtent,
+          onClaim: widget.onClaim,
+          onUnlockPremium: widget.onUnlockPremium,
+        ),
+        builder: (context, ui, track) => Stack(
+          // Превью юбилейного уровня выше обычной плитки и растёт вверх за
+          // пределы трека (см. _MilestonePreview).
+          clipBehavior: Clip.none,
+          children: [
+            ShaderMask(
+              shaderCallback: (bounds) =>
+                  _fadeGradient(ui, bounds.width).createShader(bounds),
+              blendMode: BlendMode.dstIn,
+              child: track,
+            ),
+            if (ui.pastFirstItem)
+              Positioned(
+                left: 0,
+                top: _MilestonePreview.cardCenterY - arrowVerticalOffset,
+                child: _ArrowButton(
+                  icon: Icons.chevron_left,
+                  onTap: () => _scrollByLevels(-_arrowScrollLevels),
+                ),
+              ),
+            if (ui.nextMilestone case final milestone?) ...[
+              Positioned(
+                right: 0,
+                bottom: _MilestonePreview._bottomMargin,
+                child: _MilestonePreview(
+                  level: widget.season.levels[milestone - 1],
+                  style: appearance.milestonePreview,
+                  onTap: () => _scrollToMilestone(milestone),
+                ),
+              ),
+              Positioned(
+                right:
+                    _MilestonePreview._cardSize +
+                    milestoneArrowGap -
+                    arrowButtonInset,
+                top: _MilestonePreview.cardCenterY - arrowVerticalOffset,
+                child: _ArrowButton(
+                  icon: Icons.chevron_right,
+                  onTap: () => _scrollToMilestone(milestone),
+                ),
+              ),
+            ] else if (!ui.atEnd)
+              Positioned(
+                right: 0,
+                top: 0,
+                bottom: 0,
+                child: Center(
+                  child: _ArrowButton(
+                    icon: Icons.chevron_right,
+                    onTap: () => _scrollByLevels(_arrowScrollLevels),
                   ),
                 ),
               ),
-            ),
-          if (_showLeftArrow)
-            Positioned(
-              // На одной линии со стрелкой к юбилейному уровню — обе
-              // стрелки трека должны стоять на одной высоте.
-              left: 0,
-              top: _MilestonePreview.cardCenterY - arrowVerticalOffset,
-              child: _ArrowButton(
-                icon: Icons.chevron_left,
-                onTap: () => _scrollBy(-_tileExtent * arrowScrollTileCount),
-              ),
-            ),
-          if (_nextMilestone != null)
-            Positioned(
-              right: 0,
-              // Столько же места, сколько остаётся под обычной плиткой трека
-              // (300 высотой минус её содержимое высотой 286) — так ромб
-              // превью встаёт вровень с остальными, а не съезжает вниз.
-              bottom: _MilestonePreview._bottomMargin,
-              child: _MilestonePreview(
-                level: widget.season.levels[_nextMilestone! - 1],
-                onTap: () => _scrollToMilestone(_nextMilestone!),
-                diamondColor: widget.highlightMaxLevelMilestone
-                    ? colors.milestoneDiamondMaxLevel
-                    : null,
-                simplified: widget.simplifyMilestonePreview,
-                hidePremiumBadge: widget.hideMilestonePremiumBadge,
-              ),
-            ),
-          if (_nextMilestone != null)
-            Positioned(
-              // Превью юбилейного уровня растёт вверх от общей нижней линии
-              // трека (см. _MilestonePreview) — стрелка должна указывать на
-              // его собственный центр, а не на центр всей 300-высокой
-              // области, иначе она указывает заметно ниже самой карточки.
-              //
-              // 13px — горизонтальный отступ между самой кнопкой (не рамкой
-              // Positioned) и превью: ширина карточки превью + 13 минус
-              // собственный горизонтальный паддинг _ArrowButton (8), на
-              // который её видимый круг уже отступает от границ Positioned.
-              right:
-                  _MilestonePreview._cardSize +
-                  milestoneArrowGap -
-                  arrowButtonInset,
-              top: _MilestonePreview.cardCenterY - arrowVerticalOffset,
-              child: _ArrowButton(
-                icon: Icons.chevron_right,
-                onTap: () => _scrollToMilestone(_nextMilestone!),
-              ),
-            )
-          else if (_showRightArrow)
-            Positioned(
-              right: 0,
-              top: 0,
-              bottom: 0,
-              child: Center(
-                child: _ArrowButton(
-                  icon: Icons.chevron_right,
-                  onTap: () => _scrollBy(_tileExtent * arrowScrollTileCount),
-                ),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Сама прокручиваемая лента наград (плитки уровней + тизеры по краям) —
-/// вынесена из `_RewardsTrackState.build` в отдельный виджет, а не
-/// приватный build-метод, чтобы у неё было собственное место в дереве
-/// элементов (а не слитное с остальным содержимым `Stack` в build трека).
+/// Прокручиваемая лента: тизер и карточка следующего сезона — отдельные
+/// слайверы, уровни — список фиксированной ширины.
 class _TrackList extends StatelessWidget {
   const _TrackList({
-    required this.season,
     required this.controller,
+    required this.season,
+    required this.appearance,
+    required this.levelExtent,
     required this.onClaim,
     required this.onUnlockPremium,
-    required this.hideGiftBadge,
-    required this.highlightedLevelNumber,
-    required this.hideCarouselPremiumBadge,
-    required this.goldGradientLevelNumber,
-    required this.showSeasonEndTeaser,
-    required this.showSeasonEndTeaserRequiresPremium,
-    required this.fadeGradient,
   });
 
-  final BattlePassSeason season;
   final ScrollController controller;
+  final BattlePassSeason season;
+  final TrackAppearance appearance;
+  final double levelExtent;
   final void Function(int levelNumber) onClaim;
   final VoidCallback onUnlockPremium;
-  final bool hideGiftBadge;
-  final int? highlightedLevelNumber;
-  final bool hideCarouselPremiumBadge;
-  final int? goldGradientLevelNumber;
-  final bool showSeasonEndTeaser;
-  final bool showSeasonEndTeaserRequiresPremium;
-
-  /// Считается в `_RewardsTrackState` — зависит от её собственного состояния
-  /// скролла (_nextMilestone/_hasScrolled), которое эта лента не хранит.
-  final Gradient Function(double width) fadeGradient;
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.theme.appColors.mainColors;
-    final goldGradient = LinearGradient(
-      begin: Alignment.topCenter,
-      end: Alignment.bottomCenter,
-      colors: [
-        colors.rewardTileGoldDark,
-        colors.rewardTileGoldMid,
-        colors.rewardTileGoldLight,
-      ],
-    );
-
     final levels = season.levels;
-    final items = [
-      if (!season.premiumOwned)
-        PremiumTeaserCluster(
-          onUnlock: onUnlockPremium,
-          hidePremiumBadge: hideCarouselPremiumBadge,
-        ),
-      for (var i = 0; i < levels.length; i++)
-        RewardTile(
-          level: levels[i],
-          premiumOwned: season.premiumOwned,
-          currentXp: season.currentXp,
-          nextRequiredXp: i + 1 < levels.length
-              ? levels[i + 1].requiredXp
-              : null,
-          onClaim: () => onClaim(levels[i].number),
-          onUnlockPremium: onUnlockPremium,
-          hideGiftBadge: hideGiftBadge,
-          highlighted: highlightedLevelNumber == levels[i].number,
-          hidePremiumBadge: hideCarouselPremiumBadge,
-          gradientOverride: goldGradientLevelNumber == levels[i].number
-              ? goldGradient
-              : null,
-        ),
-      if (showSeasonEndTeaser)
-        _SeasonEndTeaser(
-          maxLevel: levels.length,
-          requiresPremium: showSeasonEndTeaserRequiresPremium,
-        ),
-    ];
-    final listView = ListView(
+    final seasonEndTeaser = appearance.seasonEndTeaser;
+
+    return CustomScrollView(
       controller: controller,
       scrollDirection: Axis.horizontal,
-      children: [
-        for (var i = 0; i < items.length; i++) ...[
-          if (i > 0) const _TrackSeparator(),
-          items[i],
-        ],
+      slivers: [
+        if (!season.premiumOwned)
+          SliverToBoxAdapter(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                PremiumTeaserCluster(
+                  onUnlock: onUnlockPremium,
+                  hidePremiumBadge: appearance.hidePremiumBadges,
+                ),
+                const _TrackSeparator(),
+              ],
+            ),
+          ),
+        SliverFixedExtentList(
+          itemExtent: levelExtent,
+          delegate: SliverChildBuilderDelegate(childCount: levels.length, (
+            context,
+            i,
+          ) {
+            final level = levels[i];
+            final isLast = i == levels.length - 1;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                RewardTile(
+                  level: level,
+                  premiumOwned: season.premiumOwned,
+                  currentXp: season.currentXp,
+                  nextRequiredXp: isLast ? null : levels[i + 1].requiredXp,
+                  onClaim: () => onClaim(level.number),
+                  onUnlockPremium: onUnlockPremium,
+                  hideGiftBadge: appearance.hideGiftBadges,
+                  hidePremiumBadge: appearance.hidePremiumBadges,
+                  highlighted: appearance.highlightedLevel == level.number,
+                  gold: appearance.goldLevel == level.number,
+                ),
+                // Место под стрелку держится у каждого уровня (ширина
+                // фиксированная), но у последнего она видна, только если
+                // дальше карточка следующего сезона.
+                _TrackSeparator(visible: !isLast || seasonEndTeaser != null),
+              ],
+            );
+          }),
+        ),
+        if (seasonEndTeaser != null)
+          SliverToBoxAdapter(
+            child: _SeasonEndTeaser(
+              maxLevel: levels.length,
+              requiresPremium:
+                  seasonEndTeaser == SeasonEndTeaser.requiresPremium,
+            ),
+          ),
       ],
-    );
-    return ShaderMask(
-      shaderCallback: (bounds) =>
-          fadeGradient(bounds.width).createShader(bounds),
-      blendMode: BlendMode.dstIn,
-      child: listView,
     );
   }
 }
@@ -665,27 +388,13 @@ class _MilestonePreview extends StatelessWidget {
   const _MilestonePreview({
     required this.level,
     required this.onTap,
-    this.diamondColor,
-    this.simplified = false,
-    this.hidePremiumBadge = false,
+    this.style = MilestonePreviewStyle.regular,
   });
 
   final BattlePassLevel level;
   final VoidCallback onTap;
 
-  /// Переопределяет цвет ромба ниже (по умолчанию — обычный серый
-  /// _defaultDiamondColor); см. RewardsTrack.highlightMaxLevelMilestone.
-  final Color? diamondColor;
-
-  /// См. RewardsTrack.simplifyMilestonePreview — без короны, рамка всегда
-  /// белая независимо от claimed.
-  final bool simplified;
-
-  /// Убирает только корону (premium.svg), не трогая цвет рамки — в отличие
-  /// от `simplified`, которая меняет и то и другое разом. Только в сценарии
-  /// "Конец наград (Куплен премиум)" (см.
-  /// RewardsTrack.hideMilestonePremiumBadge).
-  final bool hidePremiumBadge;
+  final MilestonePreviewStyle style;
 
   static const _diamondRotationAngle = 0.785398; // 45°
 
@@ -725,11 +434,15 @@ class _MilestonePreview extends StatelessWidget {
 
     final reward = level.freeReward;
     // Уже забранный юбилейный уровень (просто ещё не проскроленный мимо —
-    // см. RewardsTrack._computeNextMilestone) показывается как обычная
+    // см. _RewardsTrackState._nextMilestone) показывается как обычная
     // забранная плитка: притушен, done.svg вместо короны/подарка в углу,
     // рамка #E9E9F3 4px без свечения вместо оранжевого "к клейму готово" —
     // и, в отличие от остального контента, не тускнеет вместе с ним.
     final claimed = level.state == LevelState.claimed;
+    final showCrown = switch (style) {
+      MilestonePreviewStyle.regular || MilestonePreviewStyle.maxLevel => true,
+      MilestonePreviewStyle.noCrown || MilestonePreviewStyle.plain => false,
+    };
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -737,8 +450,8 @@ class _MilestonePreview extends StatelessWidget {
           asset: reward?.iconAsset ?? '',
           gradient: cardGradient,
           badge: RewardBadgeKind.premium,
-          showBadge: !claimed && !simplified && !hidePremiumBadge,
-          borderColor: (claimed || simplified)
+          showBadge: !claimed && showCrown,
+          borderColor: (claimed || style == MilestonePreviewStyle.plain)
               ? colors.textPrimary
               : colors.milestonePreviewAccent,
           borderIgnoresOpacity: claimed,
@@ -758,10 +471,12 @@ class _MilestonePreview extends StatelessWidget {
             width: _diamondSize,
             height: _diamondSize,
             // Уровень ещё не достигнут — тот же серый, что у непройденного
-            // отрезка прогресс-бара под обычными плитками (если не
-            // переопределён diamondColor — см. выше).
+            // отрезка прогресс-бара под обычными плитками; у макс. уровня
+            // подсвечен.
             decoration: BoxDecoration(
-              color: diamondColor ?? colors.trackNodeDefault,
+              color: style == MilestonePreviewStyle.maxLevel
+                  ? colors.milestoneDiamondMaxLevel
+                  : colors.trackNodeDefault,
               borderRadius: AppRadius.circular6,
             ),
             child: Transform.rotate(
@@ -783,9 +498,9 @@ class _MilestonePreview extends StatelessWidget {
 }
 
 /// Карточка "следующий сезон" в самом конце трека (см.
-/// RewardsTrack.showSeasonEndTeaser) — колонка той же высоты, что и обычная
+/// TrackAppearance.seasonEndTeaser) — колонка той же высоты, что и обычная
 /// плитка (карточка 240 + отступ 12 + ряд ромбов 34 = 286), чтобы встать в
-/// ряд с остальными элементами ListView без отдельного позиционирования.
+/// ряд с уровнями трека без отдельного позиционирования.
 class _SeasonEndTeaser extends StatelessWidget {
   const _SeasonEndTeaser({
     required this.maxLevel,
@@ -794,8 +509,7 @@ class _SeasonEndTeaser extends StatelessWidget {
 
   final int maxLevel;
 
-  /// См. RewardsTrack.showSeasonEndTeaserRequiresPremium — меняет текст
-  /// карточки на "нужна прокачка" вместо "откроются после уровня N".
+  /// См. SeasonEndTeaser.requiresPremium — меняет текст карточки на "нужна прокачка" вместо "откроются после уровня N".
   final bool requiresPremium;
 
   /// Уровень-ориентир следующего "сезона" наград, показанный в конце
@@ -1091,32 +805,30 @@ class _TeaserDiamond extends StatelessWidget {
   }
 }
 
-/// Стрелка-разделитель между плитками трека — тот же ассет, что и внутри
-/// `PremiumTeaserCluster`, здесь используется между вообще всеми элементами.
-/// Центрируется по высоте самой плитки (RewardCarouselTile, 240), а не по
-/// всей колонке трека — иначе бейдж уровня снизу утягивает центр вниз.
-/// `Align` (не `Padding`!) — ListView задаёт дочерним элементам жёсткую
-/// (tight) высоту 300, и `Padding.deflate()` эту жёсткость сохраняет: любой
-/// внутренний SizedBox/SvgPicture с фиксированной высотой в таком контексте
-/// растягивается под оставшееся место вместо того, чтобы остаться компактным.
-/// `Align` вместо этого явно ослабляет (`loosen()`) constraints ребёнка.
+/// Стрелка-разделитель между элементами трека — тот же ассет, что и внутри
+/// `PremiumTeaserCluster`. Центрируется по высоте карточки (240), а не всей
+/// колонки с ромбом уровня.
 class _TrackSeparator extends StatelessWidget {
-  const _TrackSeparator();
+  const _TrackSeparator({this.visible = true});
+
+  static const double width = AppSizes.horizontalSize12;
+
+  final bool visible;
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-      alignment: Alignment.topCenter,
-      child: SizedBox(
-        height: AppSizes.verticalSize240,
-        child: Center(
-          child: SvgPicture.asset(
-            AppAssets.iconArrow,
-            width: AppSizes.horizontalSize12,
-            height: AppSizes.verticalSize20,
-          ),
-        ),
-      ),
+    return SizedBox(
+      width: width,
+      height: AppSizes.verticalSize240,
+      child: visible
+          ? Center(
+              child: SvgPicture.asset(
+                AppAssets.iconArrow,
+                width: width,
+                height: AppSizes.verticalSize20,
+              ),
+            )
+          : null,
     );
   }
 }

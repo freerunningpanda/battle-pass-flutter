@@ -13,38 +13,27 @@ class RewardTile extends StatefulWidget {
     this.hideGiftBadge = false,
     this.highlighted = false,
     this.hidePremiumBadge = false,
-    this.gradientOverride,
+    this.gold = false,
     super.key,
   });
 
   final BattlePassLevel level;
   final bool premiumOwned;
 
-  /// Сценарий "Премиум куплен / награда" (см. battle_pass_screen.dart) —
-  /// значок подарка в углу плитки убран у всех уровней; корона за премиум
-  /// это не затрагивает.
+  /// Значок подарка в углу не показывается (корону это не затрагивает).
   final bool hideGiftBadge;
 
-  /// Рамка 4px solid #E9E9F3 (AppColors.textPrimary) и значок подарка,
-  /// даже если он скрыт для всего трека через hideGiftBadge — точечно для
-  /// 97-го уровня сценария "Конец наград (Куплен премиум)" (см.
-  /// battle_pass_screen.dart). Активная рамка "к клейму готово" (зелёная)
-  /// всё равно перевешивает — см. showClaimUi ниже.
+  /// Белая рамка и значок подарка даже при [hideGiftBadge]. Зелёная рамка
+  /// "к клейму готово" всё равно перевешивает — см. showClaimUi ниже.
   final bool highlighted;
 
-  /// Значок короны (premium.svg) не показывается совсем, даже у уровней с
-  /// доступным премиум-апгрейдом — сама плитка (фиолетовая заливка, переход
-  /// на покупку прокачки по тапу) не меняется. Только в сценарии "Конец
-  /// наград (Не куплен премиум)" (см. battle_pass_screen.dart).
+  /// Корона не показывается даже у уровней с доступным премиум-апгрейдом —
+  /// заливка и переход на покупку по тапу при этом не меняются.
   final bool hidePremiumBadge;
 
-  /// Принудительный градиент плитки — перевешивает и заливку по редкости, и
-  /// фиолетовую "тут премиум" (showPremiumBadge). Точечно для 100-го уровня
-  /// сценария "Конец наград (Не куплен премиум)" (см.
-  /// battle_pass_screen.dart): его rarity уже 'legendary' (золотой), но
-  /// premiumOwned: false у этого уровня делает showPremiumBadge истинным и
-  /// без оверрайда перекрашивает плитку в фиолетовый.
-  final Gradient? gradientOverride;
+  /// Всегда золотой градиент (как у legendary) — перевешивает фиолетовую
+  /// заливку "тут премиум" у уровня с доступным премиум-апгрейдом.
+  final bool gold;
 
   /// Порог опыта следующего по порядку уровня — нужен, чтобы соединительная
   /// линия трека красилась по реальному прогрессу (currentXp относительно
@@ -105,11 +94,11 @@ class _RewardTileState extends State<RewardTile> {
       asset: reward?.iconAsset ?? _placeholderAsset,
       // Уровни с доступным премиум-апгрейдом всегда красим в фиолетовый —
       // тот же цвет, что у fuel в премиум-тизере, это общий язык "тут премиум".
-      gradient:
-          widget.gradientOverride ??
-          (showPremiumBadge
-              ? _purpleGradient(colors)
-              : _rarityGradient(colors, reward?.rarity)),
+      gradient: widget.gold
+          ? _rarityGradient(colors, RewardRarity.legendary)
+          : showPremiumBadge
+          ? _purpleGradient(colors)
+          : _rarityGradient(colors, reward?.rarity),
       badge: showPremiumBadge && !widget.hidePremiumBadge
           ? RewardBadgeKind.premium
           : RewardBadgeKind.gift,

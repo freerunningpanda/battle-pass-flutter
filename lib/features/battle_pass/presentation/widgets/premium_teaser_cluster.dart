@@ -18,10 +18,7 @@ class PremiumTeaserCluster extends StatefulWidget {
 
   final VoidCallback onUnlock;
 
-  /// Значок короны (premium.svg) не показывается ни у одной из 3 наград
-  /// блока — сама плитка (заливка, переход на покупку прокачки по тапу) не
-  /// меняется. Только в сценарии "Конец наград (Не куплен премиум)" (см.
-  /// battle_pass_screen.dart).
+  /// Корона не показывается ни у одной из 3 наград блока.
   final bool hidePremiumBadge;
 
   static const double width = 676;

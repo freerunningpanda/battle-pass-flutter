@@ -77,10 +77,12 @@ class RewardCarouselTile extends StatelessWidget {
     this.borderIgnoresOpacity = false,
     this.onTap,
     this.footer,
-    this.width = 242,
+    this.width = defaultWidth,
     this.height = 240,
     super.key,
   });
+
+  static const double defaultWidth = 242;
 
   final String asset;
   final Gradient gradient;

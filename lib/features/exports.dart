@@ -43,8 +43,10 @@ export 'battle_pass/presentation/widgets/reward_carousel_tile.dart';
 export 'battle_pass/presentation/widgets/reward_tile.dart';
 export 'battle_pass/presentation/widgets/rewards_track.dart';
 export 'battle_pass/presentation/widgets/scenario_flavor.dart';
+export 'battle_pass/presentation/widgets/scenario_layout.dart';
 export 'battle_pass/presentation/widgets/scenario_switcher.dart';
 export 'battle_pass/presentation/widgets/tasks_teaser_card.dart';
+export 'battle_pass/presentation/widgets/track_appearance.dart';
 export 'battle_pass/presentation/widgets/xp_progress_pill.dart';
 export 'battle_pass/presentation/screens/battle_pass_screen.dart';
 

@@ -41,12 +41,6 @@ class _BattlePassView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Уровни-ориентиры сценария "Конец наград" — точечная подсветка (белая
-    // рамка + значок подарка) и золотой градиент вместо фиолетового "тут
-    // премиум" (см. RewardsTrack.highlightedLevelNumber/goldGradientLevelNumber).
-    const highlightedTeaserLevel = 97;
-    const goldGradientLevel = 100;
-
     return Scaffold(
       body: BlocBuilder<BattlePassCubit, BattlePassState>(
         builder: (context, state) {
@@ -62,263 +56,125 @@ class _BattlePassView extends StatelessWidget {
                 style: TextStyle(color: colors.appColorWhite),
               ),
             ),
-            BattlePassLoaded(:final season, :final scenario) => Stack(
-              children: [
-                DesignCanvas(
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      const BattlePassBackground(),
-                      const LeftNavPanel(),
-                      XpProgressPill(
-                        currentLevel: season.currentLevel,
-                        maxLevel: season.maxLevel,
-                        currentXp: season.currentXp,
-                        xpToNextLevel:
-                            season.currentLevel < season.levels.length
-                            ? season.levels[season.currentLevel - 1].requiredXp
-                            : 0,
-                      ),
-                      const EventTimerBanner(),
-                      // Карточка заданий убрана в "Battle Pass завершен" —
-                      // раздавать/выполнять задания уже нечего, вместо неё
-                      // итоговое сообщение с обратным отсчётом.
-                      if (scenario == BattlePassScenario.completed)
-                        const BattlePassEndedNotice()
-                      else
-                        BlocBuilder<TasksCubit, TasksState>(
-                          builder: (context, tasksState) {
-                            final task = switch (tasksState) {
-                              TasksLoaded(:final overview) =>
-                                overview.tasks.isEmpty
-                                    ? null
-                                    : overview.tasks.first,
-                              _ => null,
-                            };
-                            return TasksTeaserCard(
-                              task: task,
-                              onTap: () => AppRouter.toTasks(context),
-                              // "Забрать опыт" прямо с тизера — только в
-                              // "Макс. уровень / Много наград" (см. README
-                              // про мок-схему заданий). "Макс. уровень / Нет
-                              // наград" в плане UI берёт за основу
-                              // premiumUnlockedNoReward — там обычный переход
-                              // на экран заданий, без клейма с тизера.
-                              claimableInline:
-                                  scenario == BattlePassScenario.maxLevel,
-                              onClaimXp: task == null
-                                  ? null
-                                  : () => context
-                                        .read<TasksCubit>()
-                                        .claimTaskXp(task.id),
-                            );
-                          },
-                        ),
-                      CentralItemDisplay(scenario: scenario),
-                      _DismissiblePremiumPromo(
-                        premiumOwned: season.premiumOwned,
-                        onUnlockPremium: () =>
-                            context.read<BattlePassCubit>().purchasePremium(),
-                        onIncreaseLevel: () =>
-                            context.read<BattlePassCubit>().increaseLevel(),
-                        // "Повысить уровень" нечего делать, если уровень уже
-                        // максимальный — баннер вместо кнопки показывает
-                        // неактивную плашку (см. PremiumBanner). Кроме
-                        // "Battle Pass завершен" — там currentLevel тоже
-                        // максимальный, но кнопка остаётся активной, как в
-                        // "Премиум куплен / награда".
-                        maxLevelReached:
-                            season.currentLevel >= season.maxLevel &&
-                            scenario != BattlePassScenario.completed,
-                        // "Забрать все награды" — только в "Макс. уровень /
-                        // Много наград". Не часть колонки PremiumBanner
-                        // (баннер фиксированной высоты, кнопка внутри сдвигала
-                        // заголовок/подзаголовок вверх) — рисуется отдельным
-                        // элементом Stack прямо под баннером, см.
-                        // _DismissiblePremiumPromoState.build.
-                        claimAllButton:
-                            scenario != BattlePassScenario.premiumLocked &&
-                                scenario !=
-                                    BattlePassScenario
-                                        .premiumUnlockedWithReward &&
-                                // rewardsEndedPremiumOwned/NotOwned пока
-                                // пиксель-в-пиксель повторяют
-                                // premiumUnlockedWithReward.
-                                scenario !=
-                                    BattlePassScenario
-                                        .rewardsEndedPremiumOwned &&
-                                scenario !=
-                                    BattlePassScenario
-                                        .rewardsEndedPremiumNotOwned &&
-                                // premiumUnlockedNoReward прячет эту кнопку;
-                                // maxLevelNoReward в плане UI берёт его за
-                                // основу (см. комментарий у enum-значения) —
-                                // тоже прячем.
-                                scenario !=
-                                    BattlePassScenario
-                                        .premiumUnlockedNoReward &&
-                                scenario !=
-                                    BattlePassScenario.maxLevelNoReward &&
-                                // Battle Pass завершен: клейм каждой награды
-                                // остаётся точечным по плиткам, общей кнопки
-                                // под баннером здесь нет.
-                                scenario != BattlePassScenario.completed &&
-                                season.levels.any(
-                                  (l) => l.state == LevelState.claimable,
-                                )
-                            ? ClaimAllButton(
-                                label: AppStrings.claimAllRewardsButton,
-                                // Тот же зелёный, что и claimGreen* в теме
-                                // (см. reward_tile.dart._ClaimButton), но
-                                // с другим направлением (сверху вниз там,
-                                // тут по умолчанию слева направо) — поэтому
-                                // не переиспользуется тот же готовый градиент.
-                                gradient: LinearGradient(
-                                  colors: [
-                                    colors.claimGreenTop,
-                                    colors.claimGreenBottom,
-                                  ],
-                                ),
-                                onPressed: () => context
-                                    .read<BattlePassCubit>()
-                                    .claimAllRewards(),
-                              )
-                            : null,
-                      ),
-                      RewardsTrack(
-                        // rewardsEndedPremiumOwned и rewardsEndedPremium
-                        // NotOwned делят одинаковые season_id/currentLevel/
-                        // startScrolledToEnd — RewardsTrack.didUpdateWidget
-                        // сравнивает именно эти поля, чтобы решить, нужен ли
-                        // повторный прыжок скролла, и между этими двумя
-                        // сценариями не видит разницы вовсе (все три
-                        // совпадают). Ключ по scenario форсирует полное
-                        // пересоздание виджета (и его initState) при любом
-                        // переключении сценария — так прыжок к концу списка
-                        // отрабатывает каждый раз заново, а не только когда
-                        // отличается season/currentLevel/startScrolledToEnd.
-                        key: ValueKey(scenario),
-                        season: season,
-                        onClaim: (levelNumber) async {
-                          // Второй вызов должен дождаться первого: claimReward
-                          // читает текущий cubit.state как снимок для copyWith,
-                          // и если оба вызова стартуют не дожидаясь друг друга,
-                          // они оба берут один и тот же снимок "до клейма" —
-                          // тогда результат более позднего emit затирает более
-                          // ранний (особенно заметно, когда премиум-награды на
-                          // уровне нет: тот вызов — no-op, но всё равно
-                          // переэмитит устаревший season поверх уже забранного).
-                          final cubit = context.read<BattlePassCubit>();
-                          await cubit.claimReward(
-                            levelNumber,
-                            isPremiumReward: false,
-                          );
-                          if (season.premiumOwned) {
-                            await cubit.claimReward(
-                              levelNumber,
-                              isPremiumReward: true,
-                            );
-                          }
-                        },
-                        onUnlockPremium: () =>
-                            context.read<BattlePassCubit>().purchasePremium(),
-                        // Ромб превью юбилейного уровня — это про то, что
-                        // трек реально на 40-м уровне, а не про "UI-базу"
-                        // сценария (см. maxLevelNoReward ниже), поэтому
-                        // завязан на currentLevel, а не наследует
-                        // premiumUnlockedNoReward.
-                        highlightMaxLevelMilestone:
-                            scenario == BattlePassScenario.maxLevel ||
-                            scenario == BattlePassScenario.maxLevelNoReward,
-                        // premiumUnlockedNoReward — как premiumUnlockedWith
-                        // Reward. maxLevelNoReward в плане UI берёт за
-                        // основу premiumUnlockedNoReward (см. трек наград
-                        // выше в battle_pass_mock_api.dart), в т.ч. и здесь.
-                        hideGiftBadge:
-                            scenario ==
-                                BattlePassScenario.premiumUnlockedWithReward ||
-                            scenario ==
-                                BattlePassScenario.premiumUnlockedNoReward ||
-                            scenario == BattlePassScenario.maxLevelNoReward ||
-                            scenario == BattlePassScenario.completed ||
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumOwned ||
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumNotOwned,
-                        // Плавающее превью юбилейного уровня без короны,
-                        // рамка всегда белая — только в "Battle Pass
-                        // завершен".
-                        simplifyMilestonePreview:
-                            scenario == BattlePassScenario.completed,
-                        // "Конец наград (Куплен/Не куплен премиум)"
-                        // открываются сразу у последнего элемента трека.
-                        startScrolledToEnd:
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumOwned ||
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumNotOwned,
-                        // Тизер "следующего сезона" в самом конце трека —
-                        // тоже в обоих. Заодно (см.
-                        // RewardsTrack._computeNextMilestone) включает
-                        // задержку повторного появления превью юбилейного
-                        // уровня при обратном скролле от конца.
-                        showSeasonEndTeaser:
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumOwned ||
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumNotOwned,
-                        // Текст карточки — "нужна прокачка" вместо "откроются
-                        // после уровня N" только тут: премиум не куплен.
-                        showSeasonEndTeaserRequiresPremium:
-                            scenario ==
-                            BattlePassScenario.rewardsEndedPremiumNotOwned,
-                        // Плитка 97-го уровня — рамка #E9E9F3 и значок
-                        // подарка независимо от hideGiftBadge — тоже в обоих.
-                        highlightedLevelNumber:
-                            scenario ==
-                                    BattlePassScenario
-                                        .rewardsEndedPremiumOwned ||
-                                scenario ==
-                                    BattlePassScenario
-                                        .rewardsEndedPremiumNotOwned
-                            ? highlightedTeaserLevel
-                            : null,
-                        // Плавающее превью юбилейного уровня — без короны
-                        // (premium.svg) тоже в обоих.
-                        hideMilestonePremiumBadge:
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumOwned ||
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumNotOwned,
-                        // Короны убраны со всей карусели (обычные плитки +
-                        // премиум-тизер в начале) — только тут: премиум не
-                        // куплен, но в этом сценарии его всё равно не
-                        // рекламируем через плитки трека.
-                        hideCarouselPremiumBadge:
-                            scenario ==
-                            BattlePassScenario.rewardsEndedPremiumNotOwned,
-                        // 100-й уровень — золотой градиент вместо
-                        // фиолетового "тут премиум" — тоже только тут (см.
-                        // RewardTile.gradientOverride).
-                        goldGradientLevelNumber:
-                            scenario ==
-                                BattlePassScenario.rewardsEndedPremiumNotOwned
-                            ? goldGradientLevel
-                            : null,
-                      ),
-                    ],
-                  ),
-                ),
-                ScenarioSwitcher(
-                  current: scenario,
-                  onChanged: (s) =>
-                      context.read<BattlePassCubit>().switchScenario(s),
-                ),
-              ],
+            BattlePassLoaded(:final season, :final scenario) => _LoadedView(
+              season: season,
+              scenario: scenario,
             ),
           };
         },
       ),
+    );
+  }
+}
+
+class _LoadedView extends StatelessWidget {
+  const _LoadedView({required this.season, required this.scenario});
+
+  final BattlePassSeason season;
+  final BattlePassScenario scenario;
+
+  @override
+  Widget build(BuildContext context) {
+    final layout = ScenarioLayout.of(scenario);
+    final colors = context.theme.appColors.mainColors;
+    final canClaimAll =
+        layout.claimAllButton &&
+        season.levels.any((l) => l.state == LevelState.claimable);
+
+    return Stack(
+      children: [
+        DesignCanvas(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              const BattlePassBackground(),
+              const LeftNavPanel(),
+              XpProgressPill(
+                currentLevel: season.currentLevel,
+                maxLevel: season.maxLevel,
+                currentXp: season.currentXp,
+                xpToNextLevel: season.currentLevel < season.levels.length
+                    ? season.levels[season.currentLevel - 1].requiredXp
+                    : 0,
+              ),
+              const EventTimerBanner(),
+              if (layout.endedNotice)
+                const BattlePassEndedNotice()
+              else
+                BlocBuilder<TasksCubit, TasksState>(
+                  builder: (context, tasksState) {
+                    final task = switch (tasksState) {
+                      TasksLoaded(:final overview) =>
+                        overview.tasks.isEmpty ? null : overview.tasks.first,
+                      _ => null,
+                    };
+                    return TasksTeaserCard(
+                      task: task,
+                      onTap: () => AppRouter.toTasks(context),
+                      claimableInline: layout.inlineTaskClaim,
+                      onClaimXp: task == null
+                          ? null
+                          : () =>
+                                context.read<TasksCubit>().claimTaskXp(task.id),
+                    );
+                  },
+                ),
+              CentralItemDisplay(scenario: scenario),
+              _DismissiblePremiumPromo(
+                premiumOwned: season.premiumOwned,
+                onUnlockPremium: () =>
+                    context.read<BattlePassCubit>().purchasePremium(),
+                onIncreaseLevel: () =>
+                    context.read<BattlePassCubit>().increaseLevel(),
+                maxLevelReached:
+                    season.currentLevel >= season.maxLevel &&
+                    !layout.levelUpEnabledAtMax,
+                claimAllButton: canClaimAll
+                    ? ClaimAllButton(
+                        label: AppStrings.claimAllRewardsButton,
+                        // Тот же зелёный, что и claimGreen* в теме
+                        // (см. reward_tile.dart._ClaimButton), но
+                        // слева направо, а не сверху вниз.
+                        gradient: LinearGradient(
+                          colors: [
+                            colors.claimGreenTop,
+                            colors.claimGreenBottom,
+                          ],
+                        ),
+                        onPressed: () =>
+                            context.read<BattlePassCubit>().claimAllRewards(),
+                      )
+                    : null,
+              ),
+              RewardsTrack(
+                season: season,
+                appearance: layout.track,
+                onClaim: (levelNumber) async {
+                  // Второй вызов должен дождаться первого: claimReward
+                  // читает текущий cubit.state как снимок для copyWith,
+                  // и если оба вызова стартуют не дожидаясь друг друга,
+                  // они оба берут один и тот же снимок "до клейма" —
+                  // тогда результат более позднего emit затирает более
+                  // ранний (особенно заметно, когда премиум-награды на
+                  // уровне нет: тот вызов — no-op, но всё равно
+                  // переэмитит устаревший season поверх уже забранного).
+                  final cubit = context.read<BattlePassCubit>();
+                  await cubit.claimReward(levelNumber, isPremiumReward: false);
+                  if (season.premiumOwned) {
+                    await cubit.claimReward(levelNumber, isPremiumReward: true);
+                  }
+                },
+                onUnlockPremium: () =>
+                    context.read<BattlePassCubit>().purchasePremium(),
+              ),
+            ],
+          ),
+        ),
+        ScenarioSwitcher(
+          current: scenario,
+          onChanged: (s) => context.read<BattlePassCubit>().switchScenario(s),
+        ),
+      ],
     );
   }
 }
