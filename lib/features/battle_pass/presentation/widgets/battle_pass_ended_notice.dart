@@ -3,18 +3,17 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../exports.dart';
 
-/// Заменяет карточку заданий в сценарии "Battle Pass завершен" (см.
-/// battle_pass_screen.dart) — раздавать/выполнять задания уже нечего,
-/// вместо этого итоговое сообщение с обратным отсчётом, синхронизированным
-/// с EventTimerBanner (общий eventCountdownDeadline).
+/// Итоговое сообщение с обратным отсчётом вместо карточки заданий, когда
+/// боевой пропуск завершён.
 class BattlePassEndedNotice extends StatelessWidget {
-  const BattlePassEndedNotice({super.key});
+  const BattlePassEndedNotice({required this.deadline, super.key});
+
+  final DateTime deadline;
 
   static const double _cardWidth = 466;
   static const double _stickerHeight = 92;
 
-  // Рамка виджета (Figma): left:346 top:305 — сама иконка выше на половину
-  // своей высоты, так что её низ проходит ровно по верхнему краю рамки.
+  // Иконка выступает над карточкой на половину своей высоты.
   static const double _cardTop = 305;
   static const double _stickerTop = _cardTop - _stickerHeight / 2;
 
@@ -35,7 +34,10 @@ class BattlePassEndedNotice extends StatelessWidget {
         clipBehavior: Clip.none,
         alignment: Alignment.topCenter,
         children: [
-          const Padding(padding: AppPadding.topPadding46, child: _Card()),
+          Padding(
+            padding: const EdgeInsets.only(top: 46),
+            child: _Card(deadline: deadline),
+          ),
           Positioned(
             top: stickerGlowTop,
             child: Container(
@@ -58,13 +60,14 @@ class BattlePassEndedNotice extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card();
+  const _Card({required this.deadline});
+
+  final DateTime deadline;
 
   static const _borderWidth = 4.0;
   static const _outerRadius = 40.0;
 
-  // Форма диагонального блика (Figma) — сами цвета берутся из темы
-  // (см. build), здесь только геометрия градиента.
+  // Геометрия диагонального блика (по Figma).
   static const _sheenBegin = Alignment(-0.99, -0.14); // ≈ 97.91deg
   static const _sheenEnd = Alignment(0.99, 0.14);
   static const _sheenStops = [0.0, 0.5745, 0.7907, 0.9241, 1.0];
@@ -74,11 +77,7 @@ class _Card extends StatelessWidget {
     final theme = context.theme;
     final colors = theme.appColors.mainColors;
 
-    // background (Figma): сплошной rgba(117,83,27,0.6) поверх диагонального
-    // блика rgba(200,166,111,·) с прозрачными краями — два слоя, а не один
-    // цвет, поэтому рисуются отдельными DecoratedBox друг на друге, а не
-    // одним BoxDecoration (color и gradient в нём взаимно исключают друг
-    // друга).
+    // Фон — два слоя (заливка и блик), поэтому два DecoratedBox.
     final flatBg = colors.endedNoticeFlatBg; // rgba(117,83,27,0.6)
     final sheenGradient = LinearGradient(
       begin: _sheenBegin,
@@ -92,15 +91,8 @@ class _Card extends StatelessWidget {
         colors.endedNoticeSheenTransparent,
       ],
     );
-    // Рамка (Figma border-image) — 4px кольцо, а не Border.all одним цветом:
-    // спецификация даёт два слоя — сплошной #FFB41C (glowGold) и поверх него
-    // блик из levelUpBorder*-стопов через blend "overlay" (тот же приём, что
-    // у золотой кнопки в premium_banner.dart). Обычный "заливка + паддинг
-    // вместо бордера" здесь не подходит: интерьер сделан прозрачным намеренно
-    // (см. flatBg/sheenGradient выше), и его прозрачные слои просвечивали бы
-    // не сквозь карточку до фона экрана, а до этой золотой заливки под ними.
-    // Поэтому кольцо рисуется отдельно поверх контента через CustomPaint —
-    // так оно не участвует в фоне интерьера.
+    // Кольцо рамки рисуется отдельно поверх контента: фон карточки
+    // полупрозрачный, и заливка под рамкой просвечивала бы сквозь него.
     final borderGradient = LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
@@ -119,8 +111,6 @@ class _Card extends StatelessWidget {
 
     return Container(
       width: BattlePassEndedNotice._cardWidth,
-      // Только тень — заливки/бордера здесь нет, кольцо рисует CustomPaint
-      // ниже (отдельно от контента, см. комментарий выше).
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(_outerRadius),
         boxShadow: [
@@ -151,7 +141,7 @@ class _Card extends StatelessWidget {
                 child: DecoratedBox(decoration: BoxDecoration(color: flatBg)),
               ),
               Padding(
-                padding: AppPadding.ltrbPaddingL40T40R40B32,
+                padding: const EdgeInsets.fromLTRB(40, 40, 40, 32),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -166,7 +156,7 @@ class _Card extends StatelessWidget {
                         ),
                       ),
                     ),
-                    AppSizedBoxes.verticalSizedBoxH4,
+                    const SizedBox(height: 4),
                     Text(
                       AppStrings.battlePassEndedSubtitle,
                       textAlign: TextAlign.center,
@@ -174,8 +164,8 @@ class _Card extends StatelessWidget {
                         color: colors.timerText, // #E9E9F3 @ 0.4
                       ),
                     ),
-                    AppSizedBoxes.verticalSizedBoxH28,
-                    _TimerPill(),
+                    const SizedBox(height: 28),
+                    _TimerPill(deadline: deadline),
                   ],
                 ),
               ),
@@ -187,15 +177,9 @@ class _Card extends StatelessWidget {
   }
 }
 
-/// Рамка-кольцо шириной [borderWidth] вокруг скруглённого прямоугольника
-/// (радиус [radius]) — рисуется через evenOdd-путь (внешний прямоугольник
-/// минус внутренний), поэтому середина остаётся полностью непрокрашенной:
-/// в отличие от Border.all + паддинг, ничего не подмешивается под
-/// прозрачный интерьер карточки (см. комментарий в _Card.build).
-/// Два слоя, как в Figma border-image: сплошной [borderColor] и поверх него
-/// блик [borderGradient] через blend "overlay" — оба берутся из темы в
-/// _Card.build (у CustomPainter нет своего BuildContext) — саveLayer
-/// ограничивает блендинг только этим кольцом, не задним фоном.
+/// Кольцо рамки (evenOdd-путь, середина не закрашивается): сплошной
+/// [borderColor] и поверх — блик [borderGradient] в режиме overlay.
+/// saveLayer ограничивает смешивание самим кольцом.
 class _GradientBorderPainter extends CustomPainter {
   const _GradientBorderPainter({
     required this.radius,
@@ -244,17 +228,16 @@ class _GradientBorderPainter extends CustomPainter {
 }
 
 class _TimerPill extends StatelessWidget {
-  const _TimerPill();
+  const _TimerPill({required this.deadline});
+
+  final DateTime deadline;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.theme;
     final colors = theme.appColors.mainColors;
 
-    // Тот же набор levelUpBorder*-стопов, что и у рамки карточки (см.
-    // _Card.build), но всего 4 (без levelUpBorderLight) и по более пологой
-    // диагонали — чип широкий и невысокий, полный 45°-угол давал слишком
-    // заметный перепад по вертикали.
+    // Более пологая диагональ, чем у рамки: чип широкий и низкий.
     final pillGradient = LinearGradient(
       begin: const Alignment(-1.0, -0.4),
       end: const Alignment(1.0, 0.4),
@@ -268,19 +251,15 @@ class _TimerPill extends StatelessWidget {
     );
 
     return Container(
-      // 214 — ширина из Figma, но это минимум, а не жёсткий лимит: она
-      // измерена под короткий пример ("6д 13ч 55м"), а реальный мок-дедлайн
-      // (15д 12ч 42м) шире и при фиксированной ширине обрезался.
-      constraints: const BoxConstraints(
-        minWidth: AppSizes.horizontalSize214,
-        minHeight: AppSizes.verticalSize52,
-      ),
-      padding: AppPadding.symmetricPaddingH28V8,
+      // Ширина из Figma — минимальная: длинный остаток не должен обрезаться.
+      constraints: const BoxConstraints(minWidth: 214, minHeight: 52),
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 8),
       decoration: BoxDecoration(
         gradient: pillGradient,
-        borderRadius: AppRadius.circular60,
+        borderRadius: const BorderRadius.all(Radius.circular(60)),
       ),
       child: EventCountdownText(
+        deadline: deadline,
         style: theme.appTypography.mobileTypo.semibold30.copyWith(
           color: colors.countdownPillText,
         ),

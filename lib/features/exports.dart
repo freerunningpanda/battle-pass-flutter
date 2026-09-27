@@ -1,21 +1,17 @@
-// Единая точка импорта для presentation-слоя features/**: вместо набора
-// относительных путей в каждом файле — один `import '.../exports.dart';`.
-// Затрагивает только screens/widgets/cubit — domain- и data-слои сюда
-// намеренно не включены (см. обсуждение рефакторинга).
+// Единая точка импорта для presentation-слоя features/**.
 
 // Core
+export '../core/demo/demo_scenario.dart';
 export '../core/di/injection_container.dart';
 export '../core/extensions/build_context_extension.dart';
 export '../core/navigation/app_router.dart';
+export '../core/result/result.dart';
 export '../core/theme/app_assets.dart';
 export '../core/theme/app_dimens.dart';
-export '../core/theme/app_padding.dart';
-export '../core/theme/app_radius.dart';
-export '../core/theme/app_sized_boxes.dart';
-export '../core/theme/app_sizes.dart';
 export '../core/theme/app_strings.dart';
 export '../core/theme/app_theme.dart';
 export '../core/theme/exports.dart';
+export '../core/usecase/use_case.dart';
 
 // Battle Pass — domain
 export 'battle_pass/domain/entities/level.dart';
@@ -23,7 +19,7 @@ export 'battle_pass/domain/entities/reward.dart';
 export 'battle_pass/domain/entities/season.dart';
 export 'battle_pass/domain/repositories/battle_pass_repository.dart';
 export 'battle_pass/domain/usecases/claim_all_rewards.dart';
-export 'battle_pass/domain/usecases/claim_reward.dart';
+export 'battle_pass/domain/usecases/claim_level.dart';
 export 'battle_pass/domain/usecases/get_season.dart';
 
 // Battle Pass — presentation
@@ -37,6 +33,8 @@ export 'battle_pass/presentation/widgets/design_canvas.dart';
 export 'battle_pass/presentation/widgets/event_countdown.dart';
 export 'battle_pass/presentation/widgets/event_timer_banner.dart';
 export 'battle_pass/presentation/widgets/left_nav_panel.dart';
+export 'battle_pass/presentation/widgets/milestone_preview.dart';
+export 'battle_pass/presentation/widgets/next_season_teaser.dart';
 export 'battle_pass/presentation/widgets/premium_banner.dart';
 export 'battle_pass/presentation/widgets/premium_teaser_cluster.dart';
 export 'battle_pass/presentation/widgets/reward_carousel_tile.dart';
@@ -47,6 +45,7 @@ export 'battle_pass/presentation/widgets/scenario_layout.dart';
 export 'battle_pass/presentation/widgets/scenario_switcher.dart';
 export 'battle_pass/presentation/widgets/tasks_teaser_card.dart';
 export 'battle_pass/presentation/widgets/track_appearance.dart';
+export 'battle_pass/presentation/widgets/track_geometry.dart';
 export 'battle_pass/presentation/widgets/xp_progress_pill.dart';
 export 'battle_pass/presentation/screens/battle_pass_screen.dart';
 

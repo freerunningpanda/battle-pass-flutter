@@ -3,26 +3,21 @@ import 'package:equatable/equatable.dart';
 sealed class Result<T> {
   const Result();
 
-  factory Result.success({required T data}) = Success<T>;
+  factory Result.success(T data) = Success<T>;
 
   factory Result.failure(Failure failure) = ResultFailure<T>;
 
-  void fold({
-    required void Function(Success<T> success) onSuccess,
-    required void Function(ResultFailure<T> failure) onFailure,
-  }) {
-    final self = this;
-    switch (self) {
-      case Success<T>():
-        onSuccess(self);
-      case ResultFailure<T>():
-        onFailure(self);
-    }
-  }
+  R fold<R>({
+    required R Function(T data) onSuccess,
+    required R Function(Failure failure) onFailure,
+  }) => switch (this) {
+    Success(:final data) => onSuccess(data),
+    ResultFailure(:final failure) => onFailure(failure),
+  };
 }
 
 final class Success<T> extends Result<T> {
-  const Success({required this.data});
+  const Success(this.data);
 
   final T data;
 }
@@ -33,11 +28,12 @@ final class ResultFailure<T> extends Result<T> {
   final Failure failure;
 }
 
+/// Ошибка, пригодная для показа пользователю.
 class Failure extends Equatable {
-  const Failure(this.error);
+  const Failure(this.message);
 
-  final String error;
+  final String message;
 
   @override
-  List<Object?> get props => [error];
+  List<Object?> get props => [message];
 }

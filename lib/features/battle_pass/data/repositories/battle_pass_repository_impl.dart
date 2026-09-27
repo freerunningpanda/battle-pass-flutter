@@ -1,11 +1,12 @@
 import '../../../../core/repositories/base_repository.dart';
 import '../../../../core/result/result.dart';
-import '../../domain/entities/level.dart';
 import '../../domain/entities/season.dart';
 import '../../domain/repositories/battle_pass_repository.dart';
 import '../mock/battle_pass_mock_api.dart';
 import '../models/season_model.dart';
 
+/// Мок-реализация: сезон приходит из [BattlePassMockApi], а получение наград
+/// считается локально — настоящий сервер вернул бы обновлённый сезон сам.
 class BattlePassRepositoryImpl extends BaseRepository
     implements BattlePassRepository {
   BattlePassRepositoryImpl({required BattlePassMockApi mockApi})
@@ -14,51 +15,24 @@ class BattlePassRepositoryImpl extends BaseRepository
   final BattlePassMockApi _mockApi;
 
   @override
-  Future<Result<BattlePassSeason>> getSeason(BattlePassScenario scenario) =>
-      execute(
-        () async => SeasonModel.fromJson(_mockApi.fetchSeason(scenario)),
-        const Failure('Не удалось загрузить боевой пропуск'),
-      );
+  Future<Result<BattlePassSeason>> getSeason() => execute(
+    () async => SeasonModel.fromJson(_mockApi.fetchSeason()),
+    const Failure('Не удалось загрузить боевой пропуск'),
+  );
 
   @override
-  Future<Result<BattlePassSeason>> claimReward(
+  Future<Result<BattlePassSeason>> claimLevel(
     BattlePassSeason season,
-    int levelNumber, {
-    required bool isPremiumReward,
-  }) => execute(() async {
-    final levels = season.levels
-        .map((level) {
-          if (level.number != levelNumber) return level;
-          final reward = isPremiumReward
-              ? level.premiumReward
-              : level.freeReward;
-          if (reward == null) return level;
-          final claimedReward = reward.copyWith(claimed: true);
-          return level.copyWith(
-            freeReward: isPremiumReward ? level.freeReward : claimedReward,
-            premiumReward: isPremiumReward
-                ? claimedReward
-                : level.premiumReward,
-            state: LevelState.claimed,
-          );
-        })
-        .toList(growable: false);
-    return season.copyWith(levels: levels);
-  }, const Failure('Не удалось забрать награду'));
+    int levelNumber,
+  ) => execute(
+    () async => season.claimLevel(levelNumber),
+    const Failure('Не удалось забрать награду'),
+  );
 
   @override
   Future<Result<BattlePassSeason>> claimAllRewards(BattlePassSeason season) =>
-      execute(() async {
-        final levels = season.levels
-            .map((level) {
-              if (level.state != LevelState.claimable) return level;
-              return level.copyWith(
-                state: LevelState.claimed,
-                freeReward: level.freeReward?.copyWith(claimed: true),
-                premiumReward: level.premiumReward?.copyWith(claimed: true),
-              );
-            })
-            .toList(growable: false);
-        return season.copyWith(levels: levels);
-      }, const Failure('Не удалось забрать награды'));
+      execute(
+        () async => season.claimAll(),
+        const Failure('Не удалось забрать награды'),
+      );
 }

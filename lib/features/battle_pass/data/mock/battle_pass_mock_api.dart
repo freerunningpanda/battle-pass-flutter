@@ -1,304 +1,179 @@
-import '../../domain/repositories/battle_pass_repository.dart';
+import '../../../../core/demo/demo_scenario.dart';
 
-/// Мок "сервера": отдаёт JSON-подобные Map под каждый сценарий экрана,
-/// чтобы Model.fromJson реально разбирал данные, а не просто оборачивал Dart-объекты.
+typedef _Icon = ({String icon, int amount});
+
+/// Данные одного сценария: всё, что не укладывается в общие правила
+/// [BattlePassMockApi._buildSeason], задано точечными оверрайдами по Figma.
+typedef _ScenarioData = ({
+  int currentLevel,
+  bool premiumOwned,
+  bool allClaimed,
+  Set<int> claimableLevels,
+  Set<int> claimedLevels,
+  Map<int, _Icon> icons,
+  Map<int, String> rarities,
+});
+
+/// Мок "сервера": отдаёт JSON-подобные Map под текущий сценарий экрана,
+/// чтобы Model.fromJson реально разбирал данные, а не просто оборачивал
+/// Dart-объекты.
 class BattlePassMockApi {
-  static const int _maxLevel = 100;
+  BattlePassMockApi({required DemoScenarioStore scenario})
+    : _scenario = scenario;
+
+  final DemoScenarioStore _scenario;
+
+  /// Один дедлайн на сессию — таймер не сбрасывается при смене сценария.
+  final _seasonEndsAt = DateTime.now().add(
+    const Duration(days: 15, hours: 12, minutes: 42),
+  );
+
+  static const _maxLevel = 100;
+  static const _images = 'assets/images/battle_pass';
 
   static const _rewardIcons = [
-    'assets/images/battle_pass/reward_lollipop.png',
-    'assets/images/battle_pass/reward_passport.png',
-    'assets/images/battle_pass/reward_mask_devil.png',
-    'assets/images/battle_pass/reward_mask_ghost.png',
+    '$_images/reward_lollipop.png',
+    '$_images/reward_passport.png',
+    '$_images/reward_mask_devil.png',
+    '$_images/reward_mask_ghost.png',
   ];
 
-  Map<String, dynamic> fetchSeason(BattlePassScenario scenario) {
-    switch (scenario) {
-      case BattlePassScenario.premiumLocked:
-        return _buildSeason(currentLevel: 5, premiumOwned: false);
-      case BattlePassScenario.premiumUnlockedWithReward:
-        return _buildSeason(
-          currentLevel: 12,
-          premiumOwned: true,
-          // Узел из Figma для этого сценария показывает уровни 4-8 как ещё
-          // не забранные — выбивается из обычного правила "claimable только
-          // 3 уровня перед текущим", поэтому заданы точечным оверрайдом, а
-          // не общей формулой. 4-й — "боевой" приз (пара "босс мафии" x16),
-          // 5-й — с тёмной (common) заливкой, 6-8 — с фиолетовой (epic).
-          claimableLevels: const {4, 5, 6, 7, 8},
-          freeRewardOverrides: const {
-            4: (icon: 'assets/images/battle_pass/boss.png', amount: 16),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            6: (icon: 'assets/images/battle_pass/filter.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-          },
-          rarityOverrides: const {5: 'common', 6: 'epic', 7: 'epic', 8: 'epic'},
-        );
-      case BattlePassScenario.rewardsEndedPremiumOwned:
-        return _buildSeason(
-          currentLevel: 12,
-          premiumOwned: true,
-          // Тот же набор, что и у premiumUnlockedWithReward — только 4-й
-          // с bullets.png вместо boss.png. Уровни 95-100 (хвост трека) —
-          // свой отдельный набор иконок/цветов, не пересекается с
-          // premiumUnlockedWithReward.
-          claimableLevels: const {4, 5, 6, 7, 8, 95, 96, 97, 98, 99, 100},
-          freeRewardOverrides: const {
-            4: (icon: 'assets/images/battle_pass/bullets.png', amount: 16),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            6: (icon: 'assets/images/battle_pass/filter.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-            95: (
-              icon: 'assets/images/battle_pass/reward_mask_ghost.png',
-              amount: 1,
-            ),
-            96: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            97: (icon: 'assets/images/battle_pass/bullets.png', amount: 1),
-            98: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            99: (
-              icon: 'assets/images/battle_pass/green_monster.png',
-              amount: 1,
-            ),
-            100: (icon: 'assets/images/battle_pass/bull.png', amount: 1),
-          },
-          rarityOverrides: const {
-            5: 'common',
-            6: 'epic',
-            7: 'epic',
-            8: 'epic',
-            95: 'common',
-            96: 'common',
-            97: 'common',
-            98: 'epic',
-            99: 'epic',
-            // "orange" не имеет отдельного тира редкости — ближайший
-            // существующий вариант заливки (rewardTileGoldGradient).
-            100: 'legendary',
-          },
-        );
-      case BattlePassScenario.rewardsEndedPremiumNotOwned:
-        // Наполнение — точная копия rewardsEndedPremiumOwned, только
-        // premiumOwned: false.
-        return _buildSeason(
-          currentLevel: 12,
-          premiumOwned: true,
-          claimableLevels: const {4, 5, 6, 7, 8, 95, 96, 97, 98, 99, 100},
-          freeRewardOverrides: const {
-            4: (icon: 'assets/images/battle_pass/bullets.png', amount: 16),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            6: (icon: 'assets/images/battle_pass/filter.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-            95: (
-              icon: 'assets/images/battle_pass/reward_mask_ghost.png',
-              amount: 1,
-            ),
-            96: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            97: (icon: 'assets/images/battle_pass/bullets.png', amount: 1),
-            98: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            99: (
-              icon: 'assets/images/battle_pass/green_monster.png',
-              amount: 1,
-            ),
-            100: (icon: 'assets/images/battle_pass/bull.png', amount: 1),
-          },
-          rarityOverrides: const {
-            5: 'common',
-            6: 'epic',
-            7: 'epic',
-            8: 'epic',
-            95: 'common',
-            96: 'common',
-            97: 'common',
-            98: 'epic',
-            99: 'epic',
-            100: 'legendary',
-          },
-        );
-      case BattlePassScenario.premiumUnlockedNoReward:
-        return _buildSeason(
-          currentLevel: 12,
-          premiumOwned: true,
-          // Свой набор точечных оверрайдов, отдельный от
-          // premiumUnlockedWithReward: 4-й — тёмная (common) заливка, уже
-          // забран (не в claimableLevels — по дефолтной формуле уходит в
-          // 'claimed', притух + галочка). 5-й тоже тёмный, но claimable —
-          // без этого он уходил бы в 'claimed' точно так же, а должен
-          // выглядеть обычной ещё не забранной плиткой (см.
-          // RewardTile._selected). 6-8 — фиолетовая (epic), тоже claimable.
-          // 10-й (плавающее превью юбилейного уровня) — уже забран: без
-          // короны, без свечения, белая рамка — иначе по дефолтной формуле
-          // (currentLevel-number<=3) он тоже уходил бы в 'claimable'.
-          claimableLevels: const {5, 6, 7, 8},
-          claimedLevels: const {10},
-          freeRewardOverrides: const {
-            4: (
-              icon: 'assets/images/battle_pass/reward_mask_ghost.png',
-              amount: 1,
-            ),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            6: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/bull.png', amount: 1),
-          },
-          rarityOverrides: const {
-            4: 'common',
-            5: 'common',
-            6: 'epic',
-            7: 'epic',
-            8: 'epic',
-          },
-        );
-      case BattlePassScenario.maxLevel:
-        return _buildSeason(
-          currentLevel: _maxLevel,
-          premiumOwned: true,
-          // Тот же точечный оверрайд, что и у "премиум куплен/награда" (см.
-          // выше) — уровни 4-8 получают конкретные иконки по Figma. 4 и 5 —
-          // claimable (выбиваются из обычного правила "только 3 уровня перед
-          // текущим"); 6-8 уже забраны — остаются на дефолтном 'claimed' (не
-          // добавлены в claimableLevels), только с этими иконками/цветом.
-          // 5-й красится под редкость 4-го (common), 6-8 — под фиолетовую
-          // (epic), а не свою обычную.
-          claimableLevels: const {4, 5},
-          freeRewardOverrides: const {
-            4: (
-              icon: 'assets/images/battle_pass/reward_mask_ghost.png',
-              amount: 16,
-            ),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 16,
-            ),
-            6: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/bull.png', amount: 1),
-          },
-          rarityOverrides: const {5: 'common', 6: 'epic', 7: 'epic', 8: 'epic'},
-        );
-      case BattlePassScenario.maxLevelNoReward:
-        return _buildSeason(
-          currentLevel: _maxLevel,
-          premiumOwned: true,
-          // По просьбе пользователя UI-база трека наград здесь —
-          // premiumUnlockedNoReward (см. выше), не maxLevel: тот же набор
-          // иконок/редкостей уровней 4-8, только currentLevel сам по себе —
-          // 40 (то, что и делает это "Макс. уровень"). allClaimed — здесь
-          // все элементы трека уже забраны, а не только эта пятёрка.
-          allClaimed: true,
-          freeRewardOverrides: const {
-            4: (
-              icon: 'assets/images/battle_pass/reward_mask_ghost.png',
-              amount: 1,
-            ),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            6: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/bull.png', amount: 1),
-          },
-          rarityOverrides: const {
-            4: 'common',
-            5: 'common',
-            6: 'epic',
-            7: 'epic',
-            8: 'epic',
-          },
-        );
-      case BattlePassScenario.completed:
-        return _buildSeason(
-          // Кольцо уровня в левом верхнем углу — как в "премиум куплен /
-          // награда" (тот же currentLevel: 12), а не "40/40" макс. уровня.
-          currentLevel: 12,
-          premiumOwned: true,
-          // BattlePassEndedNotice зовёт "успеть забрать оставшиеся
-          // награды" — значит есть что забирать, поэтому не allClaimed:
-          // уровни 4-8 остаются claimable. 4-й — ghost x16 (редкость и так
-          // common по дефолтной формуле, оверрайда не требует); 5-й —
-          // тёмная (common) заливка, 6-8 — фиолетовая (epic), тот же набор
-          // иконок, что и у premiumUnlockedNoReward/maxLevelNoReward выше.
-          claimableLevels: const {4, 5, 6, 7, 8},
-          freeRewardOverrides: const {
-            4: (
-              icon: 'assets/images/battle_pass/reward_mask_ghost.png',
-              amount: 16,
-            ),
-            5: (
-              icon: 'assets/images/battle_pass/premium_teaser_bag.png',
-              amount: 1,
-            ),
-            6: (icon: 'assets/images/battle_pass/blue_devil.png', amount: 1),
-            7: (icon: 'assets/images/battle_pass/green_monster.png', amount: 1),
-            8: (icon: 'assets/images/battle_pass/bull.png', amount: 1),
-          },
-          rarityOverrides: const {5: 'common', 6: 'epic', 7: 'epic', 8: 'epic'},
-        );
-    }
-  }
+  static _Icon _icon(String name, [int amount = 1]) =>
+      (icon: '$_images/$name.png', amount: amount);
 
-  Map<String, dynamic> _buildSeason({
+  /// Уровни 6–8, общие для большинства сценариев.
+  static final _monsters = {
+    6: _icon('blue_devil'),
+    7: _icon('green_monster'),
+    8: _icon('bull'),
+  };
+
+  static const _epic6to8 = {6: 'epic', 7: 'epic', 8: 'epic'};
+
+  static final _withRewardIcons = {
+    5: _icon('premium_teaser_bag'),
+    6: _icon('filter'),
+    7: _icon('blue_devil'),
+    8: _icon('green_monster'),
+  };
+
+  static final _noRewardIcons = {
+    4: _icon('reward_mask_ghost'),
+    5: _icon('premium_teaser_bag'),
+    ..._monsters,
+  };
+
+  static const _noRewardRarities = {4: 'common', 5: 'common', ..._epic6to8};
+
+  static _ScenarioData _rewardsEnded({required bool premiumOwned}) => _data(
+    currentLevel: 12,
+    premiumOwned: premiumOwned,
+    claimableLevels: const {4, 5, 6, 7, 8, 95, 96, 97, 98, 99, 100},
+    icons: {
+      ..._withRewardIcons,
+      4: _icon('bullets', 16),
+      95: _icon('reward_mask_ghost'),
+      96: _icon('premium_teaser_bag'),
+      97: _icon('bullets'),
+      98: _icon('blue_devil'),
+      99: _icon('green_monster'),
+      100: _icon('bull'),
+    },
+    rarities: const {
+      5: 'common',
+      ..._epic6to8,
+      95: 'common',
+      96: 'common',
+      97: 'common',
+      98: 'epic',
+      99: 'epic',
+      100: 'legendary',
+    },
+  );
+
+  static final Map<BattlePassScenario, _ScenarioData> _scenarios = {
+    BattlePassScenario.premiumLocked: _data(
+      currentLevel: 5,
+      premiumOwned: false,
+    ),
+    BattlePassScenario.premiumUnlockedWithReward: _data(
+      currentLevel: 12,
+      // По Figma 4–8 не забраны — вопреки правилу "claimable только 3
+      // уровня перед текущим".
+      claimableLevels: const {4, 5, 6, 7, 8},
+      icons: {..._withRewardIcons, 4: _icon('boss', 16)},
+      rarities: const {5: 'common', ..._epic6to8},
+    ),
+    BattlePassScenario.premiumUnlockedNoReward: _data(
+      currentLevel: 12,
+      claimableLevels: const {5, 6, 7, 8},
+      // Юбилейный 10-й уже забран.
+      claimedLevels: const {10},
+      icons: _noRewardIcons,
+      rarities: _noRewardRarities,
+    ),
+    BattlePassScenario.maxLevel: _data(
+      currentLevel: _maxLevel,
+      claimableLevels: const {4, 5},
+      icons: {
+        ..._noRewardIcons,
+        4: _icon('reward_mask_ghost', 16),
+        5: _icon('premium_teaser_bag', 16),
+      },
+      rarities: const {5: 'common', ..._epic6to8},
+    ),
+    BattlePassScenario.maxLevelNoReward: _data(
+      currentLevel: _maxLevel,
+      allClaimed: true,
+      icons: _noRewardIcons,
+      rarities: _noRewardRarities,
+    ),
+    BattlePassScenario.completed: _data(
+      currentLevel: 12,
+      // Итоговое сообщение зовёт забрать оставшиеся награды — они есть.
+      claimableLevels: const {4, 5, 6, 7, 8},
+      icons: {..._noRewardIcons, 4: _icon('reward_mask_ghost', 16)},
+      rarities: const {5: 'common', ..._epic6to8},
+    ),
+    BattlePassScenario.rewardsEndedPremiumOwned: _rewardsEnded(
+      premiumOwned: true,
+    ),
+    BattlePassScenario.rewardsEndedPremiumNotOwned: _rewardsEnded(
+      premiumOwned: false,
+    ),
+  };
+
+  static _ScenarioData _data({
     required int currentLevel,
-    required bool premiumOwned,
+    bool premiumOwned = true,
     bool allClaimed = false,
     Set<int> claimableLevels = const {},
-    // Точечный оверрайд конкретных уровней под 'claimed' — симметрично
-    // claimableLevels, для случаев, когда уровень должен выглядеть уже
-    // забранным вопреки дефолтной формуле (см. premiumUnlockedNoReward,
-    // 10-й уровень).
     Set<int> claimedLevels = const {},
-    Map<int, ({String icon, int amount})> freeRewardOverrides = const {},
-    Map<int, String> rarityOverrides = const {},
-  }) {
+    Map<int, _Icon> icons = const {},
+    Map<int, String> rarities = const {},
+  }) => (
+    currentLevel: currentLevel,
+    premiumOwned: premiumOwned,
+    allClaimed: allClaimed,
+    claimableLevels: claimableLevels,
+    claimedLevels: claimedLevels,
+    icons: icons,
+    rarities: rarities,
+  );
+
+  Map<String, dynamic> fetchSeason() =>
+      _buildSeason(_scenarios[_scenario.current]!);
+
+  Map<String, dynamic> _buildSeason(_ScenarioData data) {
+    final currentLevel = data.currentLevel;
     final levels = List.generate(_maxLevel, (index) {
       final number = index + 1;
-      final state = allClaimed
-          ? 'claimed'
-          : claimedLevels.contains(number)
-          ? 'claimed'
-          // claimableLevels — точечный оверрайд конкретных уровней под
-          // claimable, поэтому проверяется раньше locked/current: иначе
-          // уровни выше currentLevel (см. rewardsEndedPremiumOwned, 95-100)
-          // так и оставались бы 'locked' несмотря на оверрайд.
-          : claimableLevels.contains(number)
-          ? 'claimable'
-          : number > currentLevel
-          ? 'locked'
-          : number == currentLevel
-          ? 'current'
-          : currentLevel - number <= 3
-          ? 'claimable'
-          : 'claimed';
+      final state = _levelState(number, data);
       final claimed = state == 'claimed';
-      final rarity = rarityOverrides[number] ?? _rarityFor(number);
-      // Премиум-награда есть не на каждом уровне — только там, где и так
-      // выпадает более редкий бесплатный предмет: это она "продаёт" апгрейд,
-      // корону над плиткой показываем именно на таких уровнях. Переопределён-
-      // ная (под другой уровень) редкость тоже отменяет корону — иначе
-      // заливка "как у 4-го" не сходится с тем, есть ли премиум-плитка.
+      final rarity = data.rarities[number] ?? _rarityFor(number);
+      // Премиум-награда есть только на уровнях с редким бесплатным
+      // предметом — именно они "продают" апгрейд.
       final hasPremiumTier = rarity != 'common';
-      final freeOverride = freeRewardOverrides[number];
       return {
         'number': number,
         'required_xp': number * 1000,
@@ -307,12 +182,15 @@ class BattlePassMockApi {
           number,
           premium: false,
           claimed: claimed,
-          iconAssetOverride: freeOverride?.icon,
-          amountOverride: freeOverride?.amount,
-          rarityOverride: rarityOverrides[number],
+          icon: data.icons[number],
+          rarity: data.rarities[number],
         ),
         'premium_reward': hasPremiumTier
-            ? _reward(number, premium: true, claimed: premiumOwned && claimed)
+            ? _reward(
+                number,
+                premium: true,
+                claimed: data.premiumOwned && claimed,
+              )
             : null,
       };
     });
@@ -320,22 +198,29 @@ class BattlePassMockApi {
     return {
       'season_id': 1,
       'season_name': 'Сезон «Экспедиция»',
-      'premium_owned': premiumOwned,
+      'premium_owned': data.premiumOwned,
       'current_level': currentLevel,
-      // current_level ещё не пройден — это уровень, до завершения которого
-      // осталось набрать опыт, поэтому xp должен быть чуть меньше его
-      // порога, а не константой, слабо связанной с currentLevel. Но на
-      // максимальном уровне дальше копить нечего — там он должен быть
-      // полностью пройден (иначе ромб 40 красится как недостигнутый).
+      // Текущий уровень ещё не пройден — опыта чуть меньше его порога; на
+      // максимальном копить дальше нечего, он пройден полностью.
       'current_xp': currentLevel >= _maxLevel
           ? currentLevel * 1000
           : currentLevel * 1000 - 450,
       'max_level': _maxLevel,
       'levels': levels,
-      'season_ends_at_ms': DateTime.now()
-          .add(const Duration(days: 14))
-          .millisecondsSinceEpoch,
+      'season_ends_at_ms': _seasonEndsAt.millisecondsSinceEpoch,
     };
+  }
+
+  /// Оверрайды сценария важнее общих правил: так, 95–100 в "Конец наград"
+  /// доступны, хотя выше текущего уровня.
+  String _levelState(int number, _ScenarioData data) {
+    if (data.allClaimed || data.claimedLevels.contains(number)) {
+      return 'claimed';
+    }
+    if (data.claimableLevels.contains(number)) return 'claimable';
+    if (number > data.currentLevel) return 'locked';
+    if (number == data.currentLevel) return 'current';
+    return data.currentLevel - number <= 3 ? 'claimable' : 'claimed';
   }
 
   String _rarityFor(int level) => level % 10 == 0
@@ -350,27 +235,20 @@ class BattlePassMockApi {
     int level, {
     required bool premium,
     required bool claimed,
-    String? iconAssetOverride,
-    int? amountOverride,
-    String? rarityOverride,
+    _Icon? icon,
+    String? rarity,
   }) {
     final iconIndex = (level - 1) % _rewardIcons.length;
-    // Чип количества (×N) показываем только у леденца — у остальных наград
-    // это одна штука, амаунт-чип на плитке не рисуется.
+    // Количество (×N) по умолчанию только у леденца.
     final isLollipop = iconIndex == 0;
-    // 10-й уровень — легендарный, у него свой уникальный ассет вместо
-    // обычного цикла из четырёх иконок.
-    final iconAsset =
-        iconAssetOverride ??
-        (level == 10
-            ? 'assets/images/battle_pass/case_audi.png'
-            : _rewardIcons[iconIndex]);
     return {
       'id': level * 10 + (premium ? 1 : 0),
       'name': premium ? 'Премиум-награда $level ур.' : 'Награда $level ур.',
-      'icon_asset': iconAsset,
-      'amount': amountOverride ?? (premium ? 50 : (isLollipop ? 16 : 1)),
-      'rarity': rarityOverride ?? _rarityFor(level),
+      'icon_asset':
+          icon?.icon ??
+          (level == 10 ? '$_images/case_audi.png' : _rewardIcons[iconIndex]),
+      'amount': icon?.amount ?? (premium ? 50 : (isLollipop ? 16 : 1)),
+      'rarity': rarity ?? _rarityFor(level),
       'claimed': claimed,
     };
   }

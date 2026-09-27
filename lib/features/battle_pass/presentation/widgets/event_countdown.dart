@@ -4,19 +4,16 @@ import 'package:flutter/widgets.dart';
 
 import '../../../exports.dart';
 
-/// Дедлайн ивента "Дай пять!" — мок (см. README), общий для EventTimerBanner
-/// и BattlePassEndedNotice: вычисляется один раз за сессию (lazy top-level
-/// final), а не заново в каждом виджете — иначе их таймеры расходились бы
-/// на доли секунды между собой при каждом отдельном mount.
-final DateTime eventCountdownDeadline = DateTime.now().add(
-  const Duration(days: 15, hours: 12, minutes: 42),
-);
-
-/// Тикающий остаток времени до [eventCountdownDeadline] в формате
-/// "XXд YYч ZZм" — обновляется раз в секунду.
+/// Остаток времени до [deadline] в формате "XXд YYч ZZм". Минуты — самая
+/// мелкая единица, поэтому перерисовывается раз в минуту, ровно на её смене.
 class EventCountdownText extends StatefulWidget {
-  const EventCountdownText({required this.style, super.key});
+  const EventCountdownText({
+    required this.deadline,
+    required this.style,
+    super.key,
+  });
 
+  final DateTime deadline;
   final TextStyle style;
 
   @override
@@ -24,16 +21,33 @@ class EventCountdownText extends StatefulWidget {
 }
 
 class _EventCountdownTextState extends State<EventCountdownText> {
-  late Duration _remaining;
   Timer? _ticker;
+
+  Duration get _remaining {
+    final left = widget.deadline.difference(DateTime.now());
+    return left.isNegative ? Duration.zero : left;
+  }
 
   @override
   void initState() {
     super.initState();
-    _remaining = eventCountdownDeadline.difference(DateTime.now());
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      final left = eventCountdownDeadline.difference(DateTime.now());
-      setState(() => _remaining = left.isNegative ? Duration.zero : left);
+    _scheduleTick();
+  }
+
+  @override
+  void didUpdateWidget(covariant EventCountdownText oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.deadline != widget.deadline) _scheduleTick();
+  }
+
+  void _scheduleTick() {
+    _ticker?.cancel();
+    final remaining = _remaining;
+    if (remaining == Duration.zero) return;
+    final untilNextMinute = remaining - Duration(minutes: remaining.inMinutes);
+    _ticker = Timer(untilNextMinute, () {
+      setState(() {});
+      _scheduleTick();
     });
   }
 
@@ -45,13 +59,11 @@ class _EventCountdownTextState extends State<EventCountdownText> {
 
   @override
   Widget build(BuildContext context) {
-    final days = _remaining.inDays;
-    final hours = _remaining.inHours % 24;
-    final minutes = _remaining.inMinutes % 60;
+    final remaining = _remaining;
     return Text(
-      '$days${AppStrings.countdownDaysUnit} '
-      '$hours${AppStrings.countdownHoursUnit} '
-      '$minutes${AppStrings.countdownMinutesUnit}',
+      '${remaining.inDays}${AppStrings.countdownDaysUnit} '
+      '${remaining.inHours % 24}${AppStrings.countdownHoursUnit} '
+      '${remaining.inMinutes % 60}${AppStrings.countdownMinutesUnit}',
       style: widget.style,
     );
   }

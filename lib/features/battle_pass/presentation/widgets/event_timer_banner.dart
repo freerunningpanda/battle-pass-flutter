@@ -4,28 +4,27 @@ import 'package:flutter/material.dart';
 
 import '../../../exports.dart';
 
-/// Таймер + заголовок ивента ("+" фрейм узла "Info bar", id 1:1312) —
-/// рядом с кольцом уровня. Дедлайн — статичный мок (см. README): сам ивент
-/// "Дай пять!" сторонний по отношению к боевому пропуску, вне схемы данных
-/// этого задания, но обратный отсчёт тикает по-настоящему.
+/// Таймер до конца сезона + заголовок ивента рядом с кольцом уровня.
 class EventTimerBanner extends StatelessWidget {
-  const EventTimerBanner({super.key});
+  const EventTimerBanner({required this.deadline, super.key});
+
+  final DateTime deadline;
 
   @override
   Widget build(BuildContext context) {
     const bannerLeft = 513.0;
     const bannerTop = 56.0;
 
-    return const Positioned(
+    return Positioned(
       left: bannerLeft,
       top: bannerTop,
-      width: AppSizes.horizontalSize439,
+      width: 439,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          _CountdownTimer(),
-          AppSizedBoxes.verticalSizedBoxH8,
+          _CountdownTimer(deadline: deadline),
+          const SizedBox(height: 8),
           _EventTitle(),
         ],
       ),
@@ -34,7 +33,9 @@ class EventTimerBanner extends StatelessWidget {
 }
 
 class _CountdownTimer extends StatelessWidget {
-  const _CountdownTimer();
+  const _CountdownTimer({required this.deadline});
+
+  final DateTime deadline;
 
   @override
   Widget build(BuildContext context) {
@@ -50,8 +51,9 @@ class _CountdownTimer extends StatelessWidget {
           size: iconSize,
           color: colors.timerText,
         ),
-        AppSizedBoxes.horizontalSizedBoxW14,
+        const SizedBox(width: 14),
         EventCountdownText(
+          deadline: deadline,
           style: theme.appTypography.mobileTypo.medium26.copyWith(
             color: colors.timerText,
           ),
@@ -86,9 +88,7 @@ class _EventTitleState extends State<_EventTitle>
     final theme = context.theme;
     final colors = theme.appColors.mainColors;
 
-    // Прямоугольник шейдера градиента заголовка — 1×45, а не размер
-    // реального текста: тот неизвестен заранее, а важна только высота (так
-    // градиент растягивается по вертикали текста, не по горизонтали).
+    // Градиенту важна только высота текста — ширина неизвестна заранее.
     const gradientShaderRect = Rect.fromLTWH(0, 0, 1, 45);
     final titleGradient = LinearGradient(
       begin: Alignment.topCenter,
@@ -98,10 +98,7 @@ class _EventTitleState extends State<_EventTitle>
 
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      // "Дай пять!" в буквальном смысле — тап отвечает жестом: ладонь
-      // выпрыгивает с перехлёстом и гаснет под разлёт золотых искр вокруг
-      // заголовка. Чисто декоративная обратная связь, ничего не меняет в
-      // состоянии экрана.
+      // Декоративный отклик на тап: ладонь "дай пять" и искры.
       onTap: () => _controller.forward(from: 0),
       child: Stack(
         clipBehavior: Clip.none,
@@ -129,9 +126,7 @@ class _EventTitleState extends State<_EventTitle>
   }
 }
 
-/// Ладонь "дай пять" + разлёт искр вокруг заголовка события по тапу —
-/// целиком декоративный слой (см. _EventTitleState._controller), ничего не
-/// хранит и не влияет на данные экрана.
+/// Ладонь "дай пять" и разлёт искр вокруг заголовка по тапу.
 class _HighFiveBurst extends StatelessWidget {
   const _HighFiveBurst({required this.progress, required this.color});
 
@@ -148,9 +143,8 @@ class _HighFiveBurst extends StatelessWidget {
   Widget build(BuildContext context) {
     if (progress == 0) return const SizedBox.shrink();
 
-    // Ладонь выпрыгивает с перехлёстом первую половину анимации и
-    // растворяется во второй — сам разлёт искр (см. _buildSpark) идёт все
-    // 100% отдельным, более плавным темпом.
+    // Ладонь выпрыгивает в первой половине анимации и гаснет во второй;
+    // искры летят всю анимацию.
     final handProgress = (progress / 0.5).clamp(0.0, 1.0);
     final handScale = Curves.elasticOut.transform(handProgress);
     final handOpacity =

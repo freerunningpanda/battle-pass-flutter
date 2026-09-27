@@ -3,8 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../exports.dart';
 
-/// Минимальная реализация по ТЗ: пустой экран с кнопкой "Назад".
-/// Слои domain/data/cubit уже готовы принять реальный контент экрана "Задания".
+/// Заглушка экрана заданий по ТЗ: только кнопка "Назад".
 class TasksScreen extends StatelessWidget {
   const TasksScreen({super.key});
 
@@ -20,7 +19,7 @@ class TasksScreen extends StatelessWidget {
           child: Align(
             alignment: Alignment.topLeft,
             child: Padding(
-              padding: AppPadding.allPadding24,
+              padding: const EdgeInsets.all(24),
               child: IconButton(
                 onPressed: () => Navigator.of(context).pop(),
                 icon: Icon(Icons.arrow_back, color: colors.appColorWhite),

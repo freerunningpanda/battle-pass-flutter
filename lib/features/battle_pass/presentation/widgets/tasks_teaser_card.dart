@@ -3,11 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../exports.dart';
 
-/// Карточка-тизер "Задания" на главном экране БП — узел "Tasks_Main_BP"
-/// (id 1:1266) из макета: верхняя стеклянная плашка с наградой/прогрессом
-/// поверх нижней карточки с описанием задания и переходом на экран заданий.
-/// Полноценный список заданий — вне скоупа (см. README), поэтому показывается
-/// один мок-таск.
+/// Тизер заданий на главном экране: шапка с наградой и прогрессом поверх
+/// карточки с описанием задания и переходом на экран заданий.
 class TasksTeaserCard extends StatelessWidget {
   const TasksTeaserCard({
     required this.onTap,
@@ -20,10 +17,8 @@ class TasksTeaserCard extends StatelessWidget {
   final VoidCallback onTap;
   final BattlePassTask? task;
 
-  /// "Макс. уровень / Много наград" (см. README про мок-схему заданий) —
-  /// вместо перехода на экран заданий выполненный таск клеймится прямо с
-  /// тизера ("Забрать опыт"). Во всех остальных сценариях завершённый таск
-  /// по-прежнему просто открывает экран заданий.
+  /// Выполненное задание забирается прямо с тизера ("Забрать опыт"), а не
+  /// открывает экран заданий.
   final bool claimableInline;
   final VoidCallback? onClaimXp;
 
@@ -38,22 +33,18 @@ class TasksTeaserCard extends StatelessWidget {
     if (task == null) return const SizedBox.shrink();
 
     final claimMode = claimableInline && task.completed;
-    // Клейм-режим переиспользует "просматриваемый" completed-стиль (притух-
-    // ание + чек-иконка в чипе, см. сценарий "премиум куплен/награда") лишь
-    // частично: числовой прогресс здесь остаётся видимым и на полной
-    // непрозрачности — completed в этом смысле относится только к обычному
-    // browsable-варианту.
+    // В режиме получения прогресс остаётся на полной яркости.
     final cardTap = claimMode ? (task.claimed ? null : onClaimXp) : onTap;
 
     return Positioned(
       left: cardLeft,
       top: cardTop,
-      width: AppSizes.horizontalSize400,
+      width: 400,
       child: Material(
         color: colors.appColorTransparent,
         child: InkWell(
           onTap: cardTap,
-          borderRadius: AppRadius.circular30,
+          borderRadius: const BorderRadius.all(Radius.circular(30)),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -68,9 +59,6 @@ class TasksTeaserCard extends StatelessWidget {
                 progressCurrent: task.progressCurrent,
                 progressTarget: task.progressTarget,
                 completed: task.completed && !claimMode,
-                // Клейм-режим не притушен целиком (см. выше), но заголовок
-                // центрируется, а сегменты прогресса всё равно притушены —
-                // отдельные флаги, не общий completed.
                 centerContent: claimMode,
                 dimProgress: claimMode,
                 footerButton: claimMode
@@ -85,11 +73,8 @@ class TasksTeaserCard extends StatelessWidget {
   }
 }
 
-// Общая притушенность выполненного, но ещё не забранного задания — узел
-// "Tasks_Main_BP" сценария "премиум куплен / награда" (node-id 1-1324 в
-// Figma). Кнопка "Задания" и бейдж на ней в эту притушенность не входят —
-// они остаются на полной непрозрачности, поэтому оборачиваются в Opacity
-// отдельно от заголовка/текста/прогресса.
+// Притушенность выполненного, но не забранного задания. Кнопка "Задания"
+// и её бейдж не притушиваются.
 const double _kCompletedOpacity = 0.55;
 
 class _RewardHeader extends StatelessWidget {
@@ -119,24 +104,20 @@ class _RewardHeader extends StatelessWidget {
         Opacity(
           opacity: completed ? _kCompletedOpacity : fullOpacity,
           child: Container(
-            height: AppSizes.verticalSize110,
-            width: AppSizes.horizontalSize400,
-            padding: AppPadding.horizontalPadding30,
+            height: 110,
+            width: 400,
+            padding: const EdgeInsets.symmetric(horizontal: 30),
             decoration: BoxDecoration(
               color: colors.taskCardHeaderBg,
               borderRadius: const BorderRadius.only(
-                topLeft: AppRadius.radius30,
-                topRight: AppRadius.radius30,
+                topLeft: Radius.circular(30),
+                topRight: Radius.circular(30),
               ),
             ),
             child: Row(
               children: [
-                Image.asset(
-                  AppAssets.imageIconXpBp,
-                  width: AppSizes.allSize96,
-                  height: AppSizes.allSize96,
-                ),
-                AppSizedBoxes.horizontalSizedBoxW12,
+                Image.asset(AppAssets.imageIconXpBp, width: 96, height: 96),
+                const SizedBox(width: 12),
                 Text(
                   '${AppStrings.taskRewardXpPrefix}$rewardXp',
                   textAlign: TextAlign.center,
@@ -146,15 +127,14 @@ class _RewardHeader extends StatelessWidget {
                 ),
                 const Spacer(),
                 Container(
-                  width: AppSizes.horizontalSize112,
-                  height: AppSizes.verticalSize56,
+                  width: 112,
+                  height: 56,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: colors.taskChipBg,
-                    borderRadius: AppRadius.circular20,
+                    borderRadius: const BorderRadius.all(Radius.circular(20)),
                   ),
-                  // Галочка "готово" рисуется отдельным неприглушённым слоем
-                  // ниже (см. Positioned) — здесь на её месте пусто.
+                  // Место под галочку — сама она рисуется ниже без притушения.
                   child: completed
                       ? null
                       : Text.rich(
@@ -181,14 +161,7 @@ class _RewardHeader extends StatelessWidget {
             ),
           ),
         ),
-        // Галочка "готово" — поверх притушенной шапки, сама не тускнеет
-        // вместе с ней (см. _kCompletedOpacity). Плашка Row справа всегда
-        // прижата к правому краю (Spacer забирает всё свободное место), а
-        // сама галочка центрирована в ней — координаты те же, что были бы у
-        // неё внутри Row: 400 (ширина шапки) − 30 (правый паддинг) − 112
-        // (ширина плашки) = 258 (левый край плашки); плашка высотой 56
-        // центрирована по вертикали в шапке высотой 110 → top 27. Галочка
-        // 40×22 центрирована в плашке 112×56.
+        // Галочка поверх притушенной шапки, на месте плашки справа.
         if (completed)
           Positioned(
             left: doneBadgeLeft,
@@ -196,8 +169,8 @@ class _RewardHeader extends StatelessWidget {
             child: IgnorePointer(
               child: SvgPicture.asset(
                 AppAssets.iconDone,
-                width: AppSizes.horizontalSize40,
-                height: AppSizes.verticalSize22,
+                width: 40,
+                height: 22,
               ),
             ),
           ),
@@ -223,13 +196,10 @@ class _TaskBody extends StatelessWidget {
   final bool completed;
   final Widget footerButton;
 
-  /// "Забрать опыт" (см. TasksTeaserCard.claimMode) центрирует заголовок,
-  /// а не притушивает его вместе с остальным — самостоятельный флаг,
-  /// отдельный от completed.
+  /// В режиме получения заголовок центрирован и не притушен.
   final bool centerContent;
 
-  /// Сегменты прогресса притушены и в клейм-режиме, хотя заголовок и
-  /// шапка карточки в нём остаются на полной непрозрачности.
+  /// Сегменты прогресса притушены и в режиме получения.
   final bool dimProgress;
 
   @override
@@ -240,12 +210,10 @@ class _TaskBody extends StatelessWidget {
     const fullOpacity = 1.0;
 
     return SizedBox(
-      width: AppSizes.horizontalSize400,
+      width: 400,
       child: Stack(
         children: [
-          // Фон + текст/прогресс притушены при завершённом задании; кнопка —
-          // отдельный слой поверх, полностью непрозрачный (см.
-          // _kCompletedOpacity).
+          // Кнопка — отдельным слоем поверх, без притушения.
           Positioned.fill(
             child: Opacity(
               opacity: completed ? _kCompletedOpacity : fullOpacity,
@@ -253,15 +221,15 @@ class _TaskBody extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: colors.taskCardBodyBg,
                   borderRadius: const BorderRadius.only(
-                    bottomLeft: AppRadius.radius30,
-                    bottomRight: AppRadius.radius30,
+                    bottomLeft: Radius.circular(30),
+                    bottomRight: Radius.circular(30),
                   ),
                 ),
               ),
             ),
           ),
           Padding(
-            padding: AppPadding.ltrbPaddingL40T44R40B20,
+            padding: const EdgeInsets.fromLTRB(40, 44, 40, 20),
             child: Column(
               crossAxisAlignment: centerContent
                   ? CrossAxisAlignment.center
@@ -280,7 +248,7 @@ class _TaskBody extends StatelessWidget {
                     ),
                   ),
                 ),
-                AppSizedBoxes.verticalSizedBoxH50,
+                const SizedBox(height: 50),
                 Opacity(
                   opacity: (completed || dimProgress)
                       ? _kCompletedOpacity
@@ -290,7 +258,7 @@ class _TaskBody extends StatelessWidget {
                     target: progressTarget,
                   ),
                 ),
-                AppSizedBoxes.verticalSizedBoxH34,
+                const SizedBox(height: 34),
                 footerButton,
               ],
             ),
@@ -316,11 +284,11 @@ class _ProgressDashes extends StatelessWidget {
       children: List.generate(target, (index) {
         final filled = index < current;
         return Container(
-          width: AppSizes.horizontalSize54,
-          height: AppSizes.verticalSize8,
+          width: 54,
+          height: 8,
           decoration: BoxDecoration(
             color: filled ? colors.textPrimary : colors.progressRingTrack,
-            borderRadius: AppRadius.circular4,
+            borderRadius: const BorderRadius.all(Radius.circular(4)),
           ),
         );
       }),
@@ -347,21 +315,17 @@ class _TasksButton extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: AppSizes.horizontalSize320,
-          padding: AppPadding.ltrbPaddingL36T20R36B23,
+          width: 320,
+          padding: const EdgeInsets.fromLTRB(36, 20, 36, 23),
           decoration: BoxDecoration(
             color: colors.buttonOverlayStrong,
-            borderRadius: AppRadius.circular30,
+            borderRadius: const BorderRadius.all(Radius.circular(30)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              SvgPicture.asset(
-                AppAssets.iconTasks,
-                width: AppSizes.allSize30,
-                height: AppSizes.allSize30,
-              ),
-              AppSizedBoxes.horizontalSizedBoxW16,
+              SvgPicture.asset(AppAssets.iconTasks, width: 30, height: 30),
+              const SizedBox(width: 16),
               Text(
                 AppStrings.tasksButtonLabel,
                 style: theme.appTypography.mobileTypo.medium26.copyWith(
@@ -378,10 +342,10 @@ class _TasksButton extends StatelessWidget {
             right: badgeRight,
             top: badgeTop,
             child: Container(
-              width: AppSizes.horizontalSize44,
-              height: AppSizes.verticalSize46,
+              width: 44,
+              height: 46,
               decoration: BoxDecoration(
-                borderRadius: AppRadius.circular30,
+                borderRadius: const BorderRadius.all(Radius.circular(30)),
                 boxShadow: [
                   BoxShadow(
                     color: colors.glowShadow,
@@ -392,8 +356,8 @@ class _TasksButton extends StatelessWidget {
               ),
               child: SvgPicture.asset(
                 AppAssets.iconStickerNew,
-                width: AppSizes.horizontalSize44,
-                height: AppSizes.verticalSize46,
+                width: 44,
+                height: 46,
               ),
             ),
           ),
@@ -402,11 +366,7 @@ class _TasksButton extends StatelessWidget {
   }
 }
 
-/// Кнопка клейма опыта прямо с тизера ("Забрать опыт" / "Получено" — см.
-/// сценарий "Макс. уровень / Много наград"). В отличие от _TasksButton не
-/// декоративна: собственного тапа не имеет — реагирует на тап по всей
-/// карточке (см. TasksTeaserCard.cardTap), а после клейма просто выглядит
-/// неактивной (карточка перестаёт быть кликабельной вместе с ней).
+/// "Забрать опыт" / "Получено". Своего тапа нет — реагирует вся карточка.
 class _ClaimXpButton extends StatelessWidget {
   const _ClaimXpButton({required this.claimed});
 
@@ -417,8 +377,6 @@ class _ClaimXpButton extends StatelessWidget {
     final theme = context.theme;
     final colors = theme.appColors.mainColors;
 
-    // Кнопка "Забрать опыт" тизера заданий — отдельный, более приглушённый
-    // (alpha 0.4) зелёный, не claimGreen* трека наград.
     final claimXpButtonGradient = LinearGradient(
       begin: Alignment.topCenter,
       end: Alignment.bottomCenter,
@@ -426,28 +384,23 @@ class _ClaimXpButton extends StatelessWidget {
     );
 
     return Container(
-      width: AppSizes.horizontalSize320,
-      padding: AppPadding.ltrbPaddingL36T20R36B23,
+      width: 320,
+      padding: const EdgeInsets.fromLTRB(36, 20, 36, 23),
       decoration: BoxDecoration(
         gradient: claimed ? null : claimXpButtonGradient,
         color: claimed ? colors.taskChipBg : null,
-        borderRadius: AppRadius.circular30,
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (claimed) ...[
-            SvgPicture.asset(
-              AppAssets.iconDone,
-              width: AppSizes.horizontalSize26,
-              height: AppSizes.verticalSize14,
-            ),
-            AppSizedBoxes.horizontalSizedBoxW14,
+            SvgPicture.asset(AppAssets.iconDone, width: 26, height: 14),
+            const SizedBox(width: 14),
           ],
           Text(
             claimed ? AppStrings.xpClaimedLabel : AppStrings.claimXpButtonLabel,
             style: theme.appTypography.mobileTypo.medium26.copyWith(
-              // progressRingFill = textMuted.
               color: claimed ? colors.progressRingFill : colors.claimXpText,
             ),
           ),

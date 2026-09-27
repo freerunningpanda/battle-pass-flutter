@@ -3,14 +3,10 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../exports.dart';
 
-/// Общий наклон (shear) для всех "боевых" элементов трека — плитки,
-/// значок награды, чип количества, рамка кнопки, стрелка. Иконки/текст
-/// внутри остаются прямыми — это отдельный неповёрнутый слой поверх.
+/// Общий наклон элементов трека. Иконки и текст поверх остаются прямыми.
 const double kRewardTileSkewAngle = -0.12;
 
-/// Фоновая подложка, наклонённая через shear-transform — контент поверх неё
-/// (иконки, текст) кладётся отдельным неповёрнутым слоем, а не внутрь этого
-/// виджета, чтобы не наклонять его вместе с фоном.
+/// Наклонённая подложка; контент кладётся поверх отдельным слоем.
 class SkewedBox extends StatelessWidget {
   const SkewedBox({
     required this.width,
@@ -33,14 +29,9 @@ class SkewedBox extends StatelessWidget {
   }
 }
 
-/// Какой значок сидит в углу плитки: премиум-корона (награда доступна
-/// только с прокачкой) или обычный подарок (награда бесплатная).
+/// Значок в углу плитки: корона (нужен премиум) или подарок.
 enum RewardBadgeKind { premium, gift }
 
-/// Значок "BP_Reward_Sticker" — наклонный квадрат 55×50 с иконкой внутри
-/// (см. Figma-скрин с замером). Наклон общий (тот же shear, что у плиток),
-/// иконку поворачиваем вместе с фоном — на референсе видно, что весь бейдж
-/// читается как единая наклонная деталь.
 class RewardBadge extends StatelessWidget {
   const RewardBadge({this.kind = RewardBadgeKind.gift, super.key});
 
@@ -57,24 +48,39 @@ class RewardBadge extends StatelessWidget {
   }
 }
 
-/// Плитка одной награды трека — переиспользуется и тизером премиума
-/// (`PremiumTeaserCluster`), и обычными уровнями (`RewardTile`): везде одна
-/// и та же наклонная карточка с картинкой, бейджем и чипом количества.
+/// Свечение вокруг рамки плитки ("Backlight_BP_Card" из Figma).
+class TileGlow {
+  const TileGlow({
+    required this.color,
+    this.blurRadius = 24,
+    this.spreadRadius = 2,
+  });
+
+  final Color color;
+  final double blurRadius;
+  final double spreadRadius;
+}
+
+/// Рамка плитки и, если задано, свечение. Плитка со свечением ещё и
+/// подрастает целиком.
+class TileHighlight {
+  const TileHighlight(this.color, {this.glow});
+
+  final Color color;
+  final TileGlow? glow;
+}
+
+/// Плитка одной награды трека — общая для премиум-тизера, обычных уровней
+/// и превью юбилейного уровня: наклонная карточка с картинкой, бейджем и
+/// чипом количества.
 class RewardCarouselTile extends StatelessWidget {
   const RewardCarouselTile({
     required this.asset,
     required this.gradient,
-    this.badge = RewardBadgeKind.gift,
-    this.showBadge = true,
+    this.badge,
     this.quantityLabel,
-    this.borderColor,
-    this.showGlow = false,
-    this.glowColor,
-    this.glowBlurRadius = 24,
-    this.glowSpreadRadius = 2,
+    this.highlight,
     this.claimed = false,
-    this.locked = false,
-    this.borderIgnoresOpacity = false,
     this.onTap,
     this.footer,
     this.width = defaultWidth,
@@ -86,45 +92,28 @@ class RewardCarouselTile extends StatelessWidget {
 
   final String asset;
   final Gradient gradient;
-  final RewardBadgeKind badge;
 
-  /// Награда уже забрана — значок подарка/премиума в углу уже не значит
-  /// ничего (см. превью юбилейного уровня в rewards_track.dart).
-  final bool showBadge;
+  /// Значок в углу; `null` — без значка.
+  final RewardBadgeKind? badge;
 
   final String? quantityLabel;
-  final Color? borderColor;
+  final TileHighlight? highlight;
 
-  /// "Backlight_BP_Card" — мягкое свечение вокруг рамки. Только для
-  /// выбранной для клейма плитки или превью юбилейного уровня; у
-  /// премиум-тизера рамка тоже есть (белая, для подсветки выбора), но
-  /// свечения к ней не полагается.
-  final bool showGlow;
-
-  /// Цвет свечения — по умолчанию совпадает с рамкой, но может отличаться
-  /// (см. превью юбилейного уровня: рамка #DA7128, а свечение #E23600).
-  final Color? glowColor;
-  final double glowBlurRadius;
-  final double glowSpreadRadius;
-
+  /// Награда получена: карточка притушена (рамка — нет), в углу галочка.
   final bool claimed;
-  final bool locked;
-
-  /// Рамка рисуется отдельным, полностью непрозрачным слоем поверх
-  /// притушенной (claimed/locked) карточки, а не тускнеет вместе с ней —
-  /// см. превью юбилейного уровня в rewards_track.dart.
-  final bool borderIgnoresOpacity;
 
   final VoidCallback? onTap;
 
-  /// Плашка "Забрать" на нижнем крае карточки — рисуется только когда
-  /// награду реально можно взять. Чисто декоративная (`IgnorePointer`):
-  /// тап по ней должен попадать на тот же `InkWell`, что и по всей карточке,
-  /// а не перехватываться отдельно.
+  /// Плашка на нижнем крае карточки (например, "Забрать"). Декоративная —
+  /// тап по ней идёт в тот же `InkWell`, что и по всей карточке.
   final Widget? footer;
 
   final double width;
   final double height;
+
+  static const _claimedOpacity = 0.5;
+  static const _claimedImageOpacity = AlwaysStoppedAnimation(_claimedOpacity);
+  static const _animationDuration = Duration(milliseconds: 220);
 
   @override
   Widget build(BuildContext context) {
@@ -135,10 +124,7 @@ class RewardCarouselTile extends StatelessWidget {
     const cardHeightInset = 56.0;
     const cardInsetLeft = 21.0;
     const cardInsetTop = 28.0;
-    const claimedOpacity = 0.5;
-    const fullOpacity = 1.0;
     const borderWidth = 4.0;
-    const glowAlphaFallback = 0.6;
     const imageInsetLeft = 45.0;
     const imageInsetTop = 44.0;
     const imageWidthInset = 48.0;
@@ -148,243 +134,186 @@ class RewardCarouselTile extends StatelessWidget {
     const quantityChipRight = 34.0;
     const quantityChipGapAboveFooter = 7.0;
     const quantityChipBottomInset = 44.0;
-    const animationDuration = Duration(milliseconds: 220);
-    const footerScaleHidden = 0.85;
-    const footerScaleVisible = 1.0;
-    const footerOpacityHidden = 0.0;
-    const footerOpacityVisible = 1.0;
+    const quantityChipHeight = 36.0;
+    const footerMargin = 8.0;
+    const footerHeight = 48.0;
+    const footerHiddenScale = 0.85;
     const glowScale = 1.12;
-    const normalScale = 1.0;
     const claimedBadgeRight = 24.0;
     const claimedBadgeTop = 44.0;
 
     final cardWidth = width - cardWidthInset;
     final cardHeight = height - cardHeightInset;
-    const footerMargin = 8.0;
-    const footerHeight = 48.0;
     final footerTop = cardInsetTop + cardHeight - footerMargin - footerHeight;
-    const quantityChipHeight = 36.0;
-    // Когда снизу есть плашка "Забрать", чип количества не может стоять на
-    // своём обычном месте (у нижнего края карточки) — она его перекрывает.
-    // Сдвигаем чип строго над плашкой с отступом 7px, а без плашки
-    // оставляем прежнее место у низа карточки.
+    // С плашкой снизу чип количества поднимается над ней.
     final quantityChipTop = footer != null
         ? footerTop - quantityChipGapAboveFooter - quantityChipHeight
         : height - quantityChipBottomInset - quantityChipHeight;
-    final content = Opacity(
-      opacity: claimed ? claimedOpacity : fullOpacity,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            left: cardInsetLeft,
-            top: cardInsetTop,
-            width: cardWidth,
-            height: cardHeight,
-            child: Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                onTap: onTap,
-                child: Transform(
-                  alignment: Alignment.center,
-                  transform: Matrix4.skewX(kRewardTileSkewAngle),
-                  // Рамка и подсветка появляются по тапу (выбор для клейма) —
-                  // AnimatedContainer вместо обычного, чтобы они плавно
-                  // проступали, а не выскакивали внезапно (раньше из-за
-                  // мгновенного boxShadow плитка визуально "выпрыгивала").
-                  child: AnimatedContainer(
-                    duration: animationDuration,
-                    curve: Curves.easeOut,
-                    width: cardWidth,
-                    height: cardHeight,
-                    decoration: BoxDecoration(
-                      gradient: gradient,
-                      borderRadius: AppRadius.circular24,
-                      border: borderColor != null && !borderIgnoresOpacity
-                          ? Border.all(color: borderColor!, width: borderWidth)
-                          : null,
-                      // "Backlight_BP_Card" из Figma — мягкое свечение вокруг
-                      // выбранной для получения плитки, того же цвета, что
-                      // рамка.
-                      boxShadow: showGlow && (glowColor ?? borderColor) != null
-                          ? [
-                              BoxShadow(
-                                // Явно заданный glowColor (см. превью
-                                // юбилейного уровня) берётся как есть — по
-                                // умолчанию же (обычный клейм) свечение
-                                // мягче самой рамки, поэтому притушено.
-                                color:
-                                    glowColor ??
-                                    borderColor!.withValues(
-                                      alpha: glowAlphaFallback,
-                                    ),
-                                blurRadius: glowBlurRadius,
-                                spreadRadius: glowSpreadRadius,
-                              ),
-                            ]
-                          : null,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            left: imageInsetLeft,
-            top: imageInsetTop,
-            width: cardWidth - imageWidthInset,
-            height: cardHeight - imageHeightInset,
-            child: IgnorePointer(
-              child: Image.asset(asset, fit: BoxFit.contain),
-            ),
-          ),
-          if (showBadge)
-            Positioned(
-              left: badgeLeft,
-              top: badgeTop,
-              child: IgnorePointer(child: RewardBadge(kind: badge)),
-            ),
-          if (quantityLabel != null)
-            Positioned(
-              right: quantityChipRight,
-              top: quantityChipTop,
-              child: IgnorePointer(
-                child: SizedBox(
-                  width: AppSizes.horizontalSize69,
-                  height: AppSizes.verticalSize36,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SkewedBox(
-                        width: AppSizes.horizontalSize69,
-                        height: AppSizes.verticalSize36,
-                        decoration: BoxDecoration(
-                          color: colors.quantityChipBg,
-                          borderRadius: AppRadius.circular8,
-                        ),
-                      ),
-                      Text(
-                        quantityLabel!,
-                        style: theme.appTypography.mobileTypo.semibold26
-                            .copyWith(color: colors.appColorWhite),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          Builder(
-            builder: (context) {
-              // Наклоняем плашку footer вокруг того же центра, что и сама
-              // карточка (28 + cardHeight/2), а не вокруг своего — иначе
-              // при независимом наклоне вокруг собственного (более
-              // высокого, раз плашка ниже и у́же карточки) центра сдвиг
-              // получается меньше, чем у карточки на той же высоте, и
-              // плашка вылезает за скошенный край.
-              final origin = Offset(
-                0,
-                cardInsetTop + cardHeight / 2 - footerTop,
-              );
-              final visible = footer != null;
-              return Positioned(
-                left: cardInsetLeft + footerMargin,
-                width: cardWidth - footerMargin * 2,
-                top: footerTop,
-                height: footerHeight,
-                child: IgnorePointer(
-                  child: Transform(
-                    origin: origin,
-                    transform: Matrix4.skewX(kRewardTileSkewAngle),
-                    // Плашка не выскакивает мгновенно, а плавно проступает
-                    // и подрастает вместе с рамкой/подсветкой карточки —
-                    // держим её виджет в дереве и просто гасим/масштабируем,
-                    // а не добавляем/убираем условно (иначе анимировать
-                    // нечего, виджет появляется/исчезает мгновенно).
-                    child: AnimatedScale(
-                      duration: animationDuration,
-                      curve: Curves.easeOut,
-                      scale: visible ? footerScaleVisible : footerScaleHidden,
-                      alignment: Alignment.center,
-                      child: AnimatedOpacity(
-                        duration: animationDuration,
-                        opacity: visible
-                            ? footerOpacityVisible
-                            : footerOpacityHidden,
-                        child: footer ?? const SizedBox.shrink(),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-    // Выбранная для клейма плитка визуально подрастает целиком (картинка,
-    // бейдж, рамка — всё вместе), а не только рамка/подсветка сами по себе:
-    // Transform.scale не меняет раскладку соседей, поэтому нарочно перекрывает
-    // их — так и задумано (см. референс из Figma).
+
+    // Притушенность полученной плитки заложена в цвета и картинку, а не
+    // слоем Opacity на всю плитку — в скролле это отдельный слой на каждую.
+    final opacity = claimed ? _claimedOpacity : 1.0;
+    final glow = highlight?.glow;
+
     return AnimatedScale(
-      duration: animationDuration,
+      duration: _animationDuration,
       curve: Curves.easeOut,
-      scale: showGlow ? glowScale : normalScale,
+      scale: glow != null ? glowScale : 1,
       child: SizedBox(
         width: width,
         height: height,
-        child: claimed
-            ? Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  content,
-                  if (borderColor != null && borderIgnoresOpacity)
-                    Positioned(
-                      left: cardInsetLeft,
-                      top: cardInsetTop,
-                      width: cardWidth,
-                      height: cardHeight,
-                      child: IgnorePointer(
-                        child: Transform(
-                          alignment: Alignment.center,
-                          transform: Matrix4.skewX(kRewardTileSkewAngle),
-                          child: Container(
-                            width: cardWidth,
-                            height: cardHeight,
-                            decoration: BoxDecoration(
-                              border: Border.all(
-                                color: borderColor!,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned(
+              left: cardInsetLeft,
+              top: cardInsetTop,
+              width: cardWidth,
+              height: cardHeight,
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  onTap: onTap,
+                  child: Transform(
+                    alignment: Alignment.center,
+                    transform: Matrix4.skewX(kRewardTileSkewAngle),
+                    child: AnimatedContainer(
+                      duration: _animationDuration,
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        gradient: claimed
+                            ? gradient.withOpacity(_claimedOpacity)
+                            : gradient,
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(24),
+                        ),
+                        border: highlight == null
+                            ? null
+                            : Border.all(
+                                color: highlight!.color,
                                 width: borderWidth,
                               ),
-                              borderRadius: AppRadius.circular24,
+                        boxShadow: glow == null
+                            ? null
+                            : [
+                                BoxShadow(
+                                  color: glow.color,
+                                  blurRadius: glow.blurRadius,
+                                  spreadRadius: glow.spreadRadius,
+                                ),
+                              ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: imageInsetLeft,
+              top: imageInsetTop,
+              width: cardWidth - imageWidthInset,
+              height: cardHeight - imageHeightInset,
+              child: IgnorePointer(
+                child: Image.asset(
+                  asset,
+                  fit: BoxFit.contain,
+                  opacity: claimed ? _claimedImageOpacity : null,
+                ),
+              ),
+            ),
+            if (badge case final badge?)
+              Positioned(
+                left: badgeLeft,
+                top: badgeTop,
+                child: IgnorePointer(
+                  // Маленький значок — слой Opacity здесь дешёвый.
+                  child: Opacity(
+                    opacity: opacity,
+                    child: RewardBadge(kind: badge),
+                  ),
+                ),
+              ),
+            if (quantityLabel case final label?)
+              Positioned(
+                right: quantityChipRight,
+                top: quantityChipTop,
+                child: IgnorePointer(
+                  child: SizedBox(
+                    width: 69,
+                    height: 36,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SkewedBox(
+                          width: 69,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: colors.quantityChipBg.withValues(
+                              alpha: colors.quantityChipBg.a * opacity,
+                            ),
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(8),
                             ),
                           ),
                         ),
-                      ),
+                        Text(
+                          label,
+                          style: theme.appTypography.mobileTypo.semibold26
+                              .copyWith(
+                                color: colors.appColorWhite.withValues(
+                                  alpha: opacity,
+                                ),
+                              ),
+                        ),
+                      ],
                     ),
-                  const Positioned(
-                    right: claimedBadgeRight,
-                    top: claimedBadgeTop,
-                    child: IgnorePointer(child: _ClaimedBadge()),
                   ),
-                ],
-              )
-            : content,
+                ),
+              ),
+            Positioned(
+              left: cardInsetLeft + footerMargin,
+              width: cardWidth - footerMargin * 2,
+              top: footerTop,
+              height: footerHeight,
+              child: IgnorePointer(
+                child: Transform(
+                  // Наклон вокруг центра карточки, а не своего — иначе
+                  // плашка вылезает за скошенный край карточки.
+                  origin: Offset(0, cardInsetTop + cardHeight / 2 - footerTop),
+                  transform: Matrix4.skewX(kRewardTileSkewAngle),
+                  // Плашка всегда в дереве, чтобы появление анимировалось.
+                  child: AnimatedScale(
+                    duration: _animationDuration,
+                    curve: Curves.easeOut,
+                    scale: footer != null ? 1 : footerHiddenScale,
+                    child: AnimatedOpacity(
+                      duration: _animationDuration,
+                      opacity: footer != null ? 1 : 0,
+                      child: footer ?? const SizedBox.shrink(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (claimed)
+              const Positioned(
+                right: claimedBadgeRight,
+                top: claimedBadgeTop,
+                child: IgnorePointer(child: _ClaimedBadge()),
+              ),
+          ],
+        ),
       ),
     );
   }
 }
 
-/// Зелёная галочка "уже забрано" — верхний правый угол, без своей подложки
-/// (см. предоставленный done.svg): поверх наполовину прозрачной плитки.
+/// Галочка "получено" в правом верхнем углу.
 class _ClaimedBadge extends StatelessWidget {
   const _ClaimedBadge();
 
   @override
   Widget build(BuildContext context) {
-    return SvgPicture.asset(
-      AppAssets.iconDone,
-      width: AppSizes.horizontalSize48,
-      height: AppSizes.verticalSize26,
-    );
+    return SvgPicture.asset(AppAssets.iconDone, width: 48, height: 26);
   }
 }

@@ -25,6 +25,36 @@ class BattlePassSeason extends Equatable {
 
   bool get isMaxLevel => currentLevel >= maxLevel;
 
+  /// Порог опыта, на котором закончится текущий уровень; `null` на
+  /// максимальном уровне.
+  int? get nextLevelXp =>
+      isMaxLevel ? null : levels[currentLevel - 1].requiredXp;
+
+  /// Сезон после получения наград уровня [levelNumber]: бесплатной и, если
+  /// премиум куплен, премиальной. Недоступный для получения уровень не
+  /// меняется.
+  BattlePassSeason claimLevel(int levelNumber) => copyWith(
+    levels: [
+      for (final level in levels)
+        level.number == levelNumber ? _claimed(level) : level,
+    ],
+  );
+
+  /// Сезон после получения наград всех доступных уровней.
+  BattlePassSeason claimAll() =>
+      copyWith(levels: [for (final level in levels) _claimed(level)]);
+
+  BattlePassLevel _claimed(BattlePassLevel level) {
+    if (level.state != LevelState.claimable) return level;
+    return level.copyWith(
+      state: LevelState.claimed,
+      freeReward: level.freeReward?.copyWith(claimed: true),
+      premiumReward: premiumOwned
+          ? level.premiumReward?.copyWith(claimed: true)
+          : level.premiumReward,
+    );
+  }
+
   BattlePassSeason copyWith({
     bool? premiumOwned,
     int? currentLevel,

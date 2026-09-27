@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../exports.dart';
 
-/// Кнопка "Забрать все награды" — зелёный градиент (есть что забрать) или
-/// фиолетовый (апсейл премиума), см. AppColors.claim*Gradient из макета.
+/// Кнопка "Забрать все награды".
 class ClaimAllButton extends StatelessWidget {
   const ClaimAllButton({
     required this.label,
@@ -24,17 +23,17 @@ class ClaimAllButton extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: gradient,
-        borderRadius: AppRadius.circular30,
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
       ),
       child: Material(
         color: colors.appColorTransparent,
         child: InkWell(
-          borderRadius: AppRadius.circular30,
+          borderRadius: const BorderRadius.all(Radius.circular(30)),
           onTap: onPressed,
           child: Container(
-            width: AppSizes.horizontalSize400,
+            width: 400,
             alignment: Alignment.center,
-            padding: AppPadding.verticalPadding22,
+            padding: const EdgeInsets.symmetric(vertical: 22),
             child: Text(
               label,
               textAlign: TextAlign.center,

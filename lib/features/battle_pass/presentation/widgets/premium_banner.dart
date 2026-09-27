@@ -3,9 +3,8 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../../exports.dart';
 
-/// Карточка премиума в правом верхнем углу — две вариации: апсейл (премиум
-/// не куплен) и "повышение уровня" (премиум куплен). Фоновая иллюстрация —
-/// картинка из макета (Group 611), заголовок/описание/кнопка — живые виджеты.
+/// Карточка премиума в правом верхнем углу: апсейл (премиум не куплен) или
+/// "Повысить уровень" (куплен).
 class PremiumBanner extends StatelessWidget {
   const PremiumBanner({
     required this.premiumOwned,
@@ -17,9 +16,7 @@ class PremiumBanner extends StatelessWidget {
   final bool premiumOwned;
   final VoidCallback onPressed;
 
-  /// Уровень уже максимальный — "Повысить уровень" нечего делать: вместо
-  /// золотой кнопки показывается неактивная плашка "Достигнут максимальный
-  /// уровень" без тапа.
+  /// Уровень максимальный: вместо кнопки — неактивная плашка.
   final bool maxLevelReached;
 
   static const double width = 605;
@@ -49,14 +46,12 @@ class PremiumBanner extends StatelessWidget {
       child: ClipRect(
         child: Stack(
           children: [
-            // Group 611 (id 1:1252) в макете шире и намного выше самой карточки
-            // и обрезается по её границам — намеренный портретный bleed, а не
-            // изображение, вписанное в карточку.
+            // Иллюстрация больше карточки и обрезается её краями (по Figma).
             Positioned(
               left: premiumOwned ? artLeftUnlocked : artLeftLocked,
               top: premiumOwned ? artTopUnlocked : artTopLocked,
-              width: AppSizes.horizontalSize668,
-              height: AppSizes.verticalSize1304,
+              width: 668,
+              height: 1304,
               child: Image.asset(
                 premiumOwned
                     ? AppAssets.imagePremiumBannerUnlockedArt
@@ -80,9 +75,9 @@ class PremiumBanner extends StatelessWidget {
                       color: colors.accentGold,
                     ),
                   ),
-                  AppSizedBoxes.verticalSizedBoxH10,
+                  const SizedBox(height: 10),
                   SizedBox(
-                    width: AppSizes.horizontalSize400,
+                    width: 400,
                     child: Text(
                       premiumOwned
                           ? AppStrings.premiumBannerSubtitleLevelUp
@@ -94,16 +89,11 @@ class PremiumBanner extends StatelessWidget {
                     ),
                   ),
                   premiumOwned
-                      // Кнопка компактная (по ширине содержимого), но
-                      // прижата к левому краю баннера с отступом 32px —
-                      // фиксированные left:125/right:80 у "Прокачать" тут не
-                      // подходят (шире контент — вылезает за правый край,
-                      // см. предыдущий оверфлоу), а центрирование по Column
-                      // давало отступ ~67px вместо нужных 32.
+                      // По ширине содержимого, прижата к левому краю.
                       ? Align(
                           alignment: Alignment.center,
                           child: Padding(
-                            padding: AppPadding.onlyPaddingL32T53,
+                            padding: const EdgeInsets.only(left: 32, top: 53),
                             child: maxLevelReached
                                 ? const _MaxLevelReachedNotice()
                                 : _UpgradeButton(
@@ -115,7 +105,11 @@ class PremiumBanner extends StatelessWidget {
                           ),
                         )
                       : Padding(
-                          padding: AppPadding.onlyPaddingL125T27R80,
+                          padding: const EdgeInsets.only(
+                            left: 125,
+                            top: 27,
+                            right: 80,
+                          ),
                           child: _UpgradeButton(
                             label: AppStrings.unlockPremiumButton,
                             onPressed: onPressed,
@@ -131,8 +125,7 @@ class PremiumBanner extends StatelessWidget {
   }
 }
 
-/// Неактивная плашка вместо "Повысить уровень", когда повышать уже некуда —
-/// без градиента/иконки/тапа, только приглушённый текст на стеклянном фоне.
+/// Неактивная плашка вместо "Повысить уровень" на максимальном уровне.
 class _MaxLevelReachedNotice extends StatelessWidget {
   const _MaxLevelReachedNotice();
 
@@ -142,12 +135,12 @@ class _MaxLevelReachedNotice extends StatelessWidget {
     final colors = theme.appColors.mainColors;
 
     return Container(
-      width: AppSizes.horizontalSize400,
+      width: 400,
       alignment: Alignment.center,
-      padding: AppPadding.symmetricPaddingH24V22,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
       decoration: BoxDecoration(
         color: colors.buttonOverlayStrong, // #E9E9F3 @ 0.1
-        borderRadius: AppRadius.circular30,
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
       ),
       child: Text(
         AppStrings.maxLevelReachedNotice,
@@ -202,10 +195,10 @@ class _UpgradeButton extends StatelessWidget {
     );
 
     return Container(
-      height: AppSizes.verticalSize100,
-      width: AppSizes.horizontalSize400,
+      height: 100,
+      width: 400,
       decoration: BoxDecoration(
-        borderRadius: AppRadius.circular30,
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
         boxShadow: [
           BoxShadow(
             color: colors.glowShadow,
@@ -216,7 +209,7 @@ class _UpgradeButton extends StatelessWidget {
       ),
       child: Material(
         color: colors.appColorTransparent,
-        borderRadius: AppRadius.circular30,
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
         clipBehavior: Clip.antiAlias,
         child: Ink(
           decoration: BoxDecoration(gradient: itemTagGradient),
@@ -231,20 +224,16 @@ class _UpgradeButton extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  AppSizedBoxes.horizontalSizedBoxW32,
-                  SvgPicture.asset(
-                    icon,
-                    width: AppSizes.horizontalSize27,
-                    height: iconHeight,
-                  ),
-                  AppSizedBoxes.horizontalSizedBoxW27,
+                  const SizedBox(width: 32),
+                  SvgPicture.asset(icon, width: 27, height: iconHeight),
+                  const SizedBox(width: 27),
                   Text(
                     label,
                     style: theme.appTypography.mobileTypo.medium30.copyWith(
                       color: colors.itemTagText,
                     ),
                   ),
-                  AppSizedBoxes.horizontalSizedBoxW32,
+                  const SizedBox(width: 32),
                 ],
               ),
             ),

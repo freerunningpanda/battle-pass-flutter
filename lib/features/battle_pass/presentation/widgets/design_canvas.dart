@@ -2,12 +2,9 @@ import 'package:flutter/widgets.dart';
 
 import '../../../exports.dart';
 
-/// Оборачивает контент в фиксированный холст 2320×1080 (как в Figma) и
-/// растягивает его на весь экран устройства — реальные экраны чуть отличаются
-/// по пропорциям от макета, а `BoxFit.fill` вместо `contain` не оставляет
-/// чёрных полей по краям (важнее заполнить экран, чем сохранить точное
-/// соотношение сторон при разнице в пару процентов). Дети верстаются
-/// напрямую в координатах/размерах из Figma.
+/// Холст 2320×1080 в координатах Figma, вписанный в экран с сохранением
+/// пропорций: на экране другой формы по краям остаются поля цвета фона
+/// Scaffold, но ничего не растягивается.
 class DesignCanvas extends StatelessWidget {
   const DesignCanvas({required this.child, super.key});
 
@@ -17,7 +14,6 @@ class DesignCanvas extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox.expand(
       child: FittedBox(
-        fit: BoxFit.fill,
         child: SizedBox(
           width: AppDimens.designWidth,
           height: AppDimens.designHeight,

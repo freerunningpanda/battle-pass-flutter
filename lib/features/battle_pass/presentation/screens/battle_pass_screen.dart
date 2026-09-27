@@ -13,22 +13,28 @@ class BattlePassScreen extends StatelessWidget {
       create: (_) => sl<BattlePassCubit>(),
       child: BlocProvider<TasksCubit>(
         create: (_) => sl<TasksCubit>(),
-        // Мок-таск на тизер-карточке (см. TasksMockApi) свой под каждый
-        // сценарий (разные xp/прогресс/текст) — держим его в синхроне со
-        // scenario, а не только с начальным сценарием TasksCubit по
-        // умолчанию. Сравниваем именно scenario, а не season.premiumOwned:
-        // "премиум куплен/награда" и "макс. уровень" оба premiumOwned=true,
-        // но с разными тасками.
-        child: BlocListener<BattlePassCubit, BattlePassState>(
-          listenWhen: (previous, current) =>
-              current is BattlePassLoaded &&
-              (previous is! BattlePassLoaded ||
-                  previous.scenario != current.scenario),
-          listener: (context, state) {
-            if (state is BattlePassLoaded) {
-              context.read<TasksCubit>().load(state.scenario);
-            }
-          },
+        child: MultiBlocListener(
+          listeners: [
+            // Задания зависят от сценария мок-бэкенда — перезагружаем их
+            // при каждой его смене.
+            BlocListener<BattlePassCubit, BattlePassState>(
+              listenWhen: (previous, current) =>
+                  current is BattlePassLoaded &&
+                  (previous is! BattlePassLoaded ||
+                      previous.scenario != current.scenario),
+              listener: (context, _) => context.read<TasksCubit>().load(),
+            ),
+            BlocListener<BattlePassCubit, BattlePassState>(
+              listenWhen: (_, current) =>
+                  current is BattlePassLoaded && current.actionError != null,
+              listener: (context, state) {
+                final error = (state as BattlePassLoaded).actionError!;
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text(error.message)));
+              },
+            ),
+          ],
           child: const _BattlePassView(),
         ),
       ),
@@ -89,17 +95,10 @@ class _LoadedView extends StatelessWidget {
             children: [
               const BattlePassBackground(),
               const LeftNavPanel(),
-              XpProgressPill(
-                currentLevel: season.currentLevel,
-                maxLevel: season.maxLevel,
-                currentXp: season.currentXp,
-                xpToNextLevel: season.currentLevel < season.levels.length
-                    ? season.levels[season.currentLevel - 1].requiredXp
-                    : 0,
-              ),
-              const EventTimerBanner(),
+              XpProgressPill(season: season),
+              EventTimerBanner(deadline: season.seasonEndsAt),
               if (layout.endedNotice)
-                const BattlePassEndedNotice()
+                BattlePassEndedNotice(deadline: season.seasonEndsAt)
               else
                 BlocBuilder<TasksCubit, TasksState>(
                   builder: (context, tasksState) {
@@ -120,21 +119,20 @@ class _LoadedView extends StatelessWidget {
                   },
                 ),
               CentralItemDisplay(scenario: scenario),
+              // Ключ по сценарию: при его смене закрытый баннер снова
+              // показывается, а трек заново встаёт в начальную позицию.
               _DismissiblePremiumPromo(
+                key: ValueKey((#promo, scenario)),
                 premiumOwned: season.premiumOwned,
                 onUnlockPremium: () =>
                     context.read<BattlePassCubit>().purchasePremium(),
                 onIncreaseLevel: () =>
                     context.read<BattlePassCubit>().increaseLevel(),
                 maxLevelReached:
-                    season.currentLevel >= season.maxLevel &&
-                    !layout.levelUpEnabledAtMax,
+                    season.isMaxLevel && !layout.levelUpEnabledAtMax,
                 claimAllButton: canClaimAll
                     ? ClaimAllButton(
                         label: AppStrings.claimAllRewardsButton,
-                        // Тот же зелёный, что и claimGreen* в теме
-                        // (см. reward_tile.dart._ClaimButton), но
-                        // слева направо, а не сверху вниз.
                         gradient: LinearGradient(
                           colors: [
                             colors.claimGreenTop,
@@ -147,23 +145,10 @@ class _LoadedView extends StatelessWidget {
                     : null,
               ),
               RewardsTrack(
+                key: ValueKey((#track, scenario)),
                 season: season,
                 appearance: layout.track,
-                onClaim: (levelNumber) async {
-                  // Второй вызов должен дождаться первого: claimReward
-                  // читает текущий cubit.state как снимок для copyWith,
-                  // и если оба вызова стартуют не дожидаясь друг друга,
-                  // они оба берут один и тот же снимок "до клейма" —
-                  // тогда результат более позднего emit затирает более
-                  // ранний (особенно заметно, когда премиум-награды на
-                  // уровне нет: тот вызов — no-op, но всё равно
-                  // переэмитит устаревший season поверх уже забранного).
-                  final cubit = context.read<BattlePassCubit>();
-                  await cubit.claimReward(levelNumber, isPremiumReward: false);
-                  if (season.premiumOwned) {
-                    await cubit.claimReward(levelNumber, isPremiumReward: true);
-                  }
-                },
+                onClaim: context.read<BattlePassCubit>().claimLevel,
                 onUnlockPremium: () =>
                     context.read<BattlePassCubit>().purchasePremium(),
               ),
@@ -179,13 +164,12 @@ class _LoadedView extends StatelessWidget {
   }
 }
 
-/// Баннер премиума + кнопка закрытия — своё локальное состояние видимости,
-/// изолированное в отдельном виджете: скрытие/показ не должно триггерить
-/// перестройку соседей по Stack (трек наград и т.п.), которые с баннером
-/// никак не связаны.
+/// Баннер премиума с кнопкой закрытия. Видимость — локальное состояние,
+/// чтобы закрытие не перестраивало остальной экран.
 class _DismissiblePremiumPromo extends StatefulWidget {
   const _DismissiblePremiumPromo({
     required this.premiumOwned,
+    super.key,
     required this.onUnlockPremium,
     required this.onIncreaseLevel,
     this.claimAllButton,
@@ -212,9 +196,6 @@ class _DismissiblePremiumPromoState extends State<_DismissiblePremiumPromo> {
     void dismiss() => setState(() => _visible = false);
 
     const claimAllButtonRight = 6.0;
-    // Нижний край кнопки "Забрать все награды" должен оставаться выше
-    // плавающего превью юбилейного уровня в RewardsTrack — см. комментарий
-    // ниже про Positioned(bottom: AppDimens.designHeight - ...).
     const claimAllButtonBottomAnchor = 748.0;
     const claimAllButtonBottomMargin = 8.0;
     const closeButtonRight = 80.0;
@@ -225,26 +206,13 @@ class _DismissiblePremiumPromoState extends State<_DismissiblePremiumPromo> {
         children: [
           PremiumBanner(
             premiumOwned: widget.premiumOwned,
-            // Кнопка баннера переключает сценарий в обоих состояниях —
-            // "Прокачать" ведёт на премиум, "Повысить уровень" на макс.
-            // уровень; скрытие баннера остаётся отдельным действием
-            // крестика рядом, а не побочным эффектом этой кнопки.
             onPressed: widget.premiumOwned
                 ? widget.onIncreaseLevel
                 : widget.onUnlockPremium,
             maxLevelReached: widget.maxLevelReached,
           ),
-          // Отдельный элемент Stack, а не часть колонки баннера — баннер
-          // фиксированной высоты, и добавление кнопки внутрь неё раньше
-          // сдвигало заголовок/подзаголовок вверх (растущий снизу-вверх
-          // bottom-anchored Column). "top: height+24" (сразу под баннером)
-          // наезжал на плавающее превью юбилейного уровня из RewardsTrack —
-          // оно якорится от низа холста (Positioned(bottom:24,height:300) +
-          // сама карточка 268+12+34=314 снизу с отступом 14 в rewards_track
-          // .dart), поэтому её верхний край фиксирован в координатах холста:
-          // designHeight-24-14-314=728. Поднимаем кнопку по низу (не по
-          // верху — так не нужно знать точную высоту самой кнопки), чтобы
-          // её нижний край гарантированно оставался выше этой отметки.
+          // Кнопка привязана низом к верхнему краю превью юбилейного уровня
+          // (его положение на холсте фиксировано), чтобы не наезжать на него.
           if (widget.claimAllButton != null)
             Positioned(
               right: claimAllButtonRight,
@@ -265,13 +233,13 @@ class _DismissiblePremiumPromoState extends State<_DismissiblePremiumPromo> {
                 customBorder: const CircleBorder(),
                 onTap: dismiss,
                 child: Container(
-                  width: AppSizes.allSize100,
-                  height: AppSizes.allSize100,
-                  padding: AppPadding.allPadding32,
+                  width: 100,
+                  height: 100,
+                  padding: const EdgeInsets.all(32),
                   child: SvgPicture.asset(
                     AppAssets.iconClose,
-                    width: AppSizes.allSize36,
-                    height: AppSizes.allSize36,
+                    width: 36,
+                    height: 36,
                   ),
                 ),
               ),

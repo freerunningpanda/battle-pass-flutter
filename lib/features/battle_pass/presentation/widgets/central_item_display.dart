@@ -19,8 +19,8 @@ class CentralItemDisplay extends StatelessWidget {
     return Positioned(
       left: itemLeft,
       top: itemTop,
-      width: AppSizes.horizontalSize600,
-      height: AppSizes.verticalSize550,
+      width: 600,
+      height: 550,
       child: AnimatedSwitcher(
         duration: switchDuration,
         child: Column(
@@ -36,10 +36,10 @@ class CentralItemDisplay extends StatelessWidget {
                 ),
               ),
             ),
-            AppSizedBoxes.verticalSizedBoxH20,
+            const SizedBox(height: 20),
             if (flavor.tag case final tag?) ...[
               _Tag(text: tag),
-              AppSizedBoxes.verticalSizedBoxH10,
+              const SizedBox(height: 10),
             ],
             _ItemTitle(
               text: flavor.itemTitle,
@@ -70,21 +70,17 @@ class _Tag extends StatelessWidget {
     );
 
     return Container(
-      width: AppSizes.horizontalSize324,
-      height: AppSizes.verticalSize39,
-      padding: AppPadding.onlyPaddingL12R19,
+      width: 324,
+      height: 39,
+      padding: const EdgeInsets.only(left: 12, right: 19),
       decoration: BoxDecoration(
         gradient: tagGradient,
-        borderRadius: AppRadius.circular30,
+        borderRadius: const BorderRadius.all(Radius.circular(30)),
       ),
       child: Row(
         children: [
-          SvgPicture.asset(
-            AppAssets.iconPremiumIcon,
-            width: AppSizes.horizontalSize30,
-            height: AppSizes.verticalSize22,
-          ),
-          AppSizedBoxes.horizontalSizedBoxW10,
+          SvgPicture.asset(AppAssets.iconPremiumIcon, width: 30, height: 22),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               text,
@@ -109,8 +105,7 @@ class _ItemTitle extends StatelessWidget {
 
   final String text;
 
-  /// Картинка предмета — переиспользуется как превью в диалоге по тапу на
-  /// инфо-иконку, чтобы не грузить отдельный ассет.
+  /// Картинка предмета — она же превью в диалоге.
   final String infoAsset;
 
   final String infoText;
@@ -130,7 +125,7 @@ class _ItemTitle extends StatelessWidget {
             ),
           ),
         ),
-        AppSizedBoxes.horizontalSizedBoxW16,
+        const SizedBox(width: 16),
         InkWell(
           customBorder: const CircleBorder(),
           onTap: () => showDialog<void>(
@@ -141,18 +136,13 @@ class _ItemTitle extends StatelessWidget {
               description: infoText,
             ),
           ),
-          child: SvgPicture.asset(
-            AppAssets.iconInfo,
-            width: AppSizes.allSize36,
-            height: AppSizes.allSize36,
-          ),
+          child: SvgPicture.asset(AppAssets.iconInfo, width: 36, height: 36),
         ),
       ],
     );
   }
 
-  // "или" между двумя названиями предмета подсвечивается золотым (см.
-  // node-id 1-1372 в Figma) — остальной текст остаётся обычным.
+  // "или" между двумя названиями — золотым (по Figma).
   InlineSpan _titleSpan(BuildContext context, String text) {
     final theme = context.theme;
     final colors = theme.appColors.mainColors;
@@ -177,10 +167,7 @@ class _ItemTitle extends StatelessWidget {
   }
 }
 
-/// Карточка предмета по тапу на инфо-иконку рядом с названием — превью,
-/// заголовок и описание. Тот же язык оформления (золотая рамка + мягкое
-/// свечение), что и у выноски дев-переключателя сценариев
-/// (см. scenario_switcher.dart._ScenarioSwitcherHint).
+/// Карточка предмета по тапу на инфо-иконку: превью, заголовок, описание.
 class _ItemInfoDialog extends StatelessWidget {
   const _ItemInfoDialog({
     required this.title,
@@ -202,21 +189,17 @@ class _ItemInfoDialog extends StatelessWidget {
     const borderWidth = 1.5;
     const glowBlurRadius = 24.0;
     const glowSpreadRadius = 1.0;
-    // Верхний паддинг больше остальных — освобождает место под крестик,
-    // который плавает поверх скролла отдельным слоем (см. Stack ниже) и не
-    // должен наезжать на превью/заголовок в самом верху контента.
+    // Сверху — место под крестик, плавающий поверх контента.
     const contentPadding = EdgeInsets.fromLTRB(32, 52, 32, 32);
     const closeButtonInset = 8.0;
     const closeButtonPadding = 8.0;
-    // Диалог живёт в реальных координатах экрана устройства (а не в 1080px
-    // дизайн-канвасе — showDialog кладёт его выше DesignCanvas, поверх
-    // всего MaterialApp), на невысоком landscape-экране превью+текст могут
-    // не влезть по высоте — отсюда и maxHeight, и скролл контента ниже.
+    // Диалог — в координатах экрана, а не холста: на низком экране
+    // контент может не влезть, поэтому maxHeight и скролл.
     final dialogMaxHeight = MediaQuery.sizeOf(context).height * 0.8;
 
     return Dialog(
       backgroundColor: colors.appColorTransparent,
-      insetPadding: AppPadding.allPadding24,
+      insetPadding: const EdgeInsets.all(24),
       child: ConstrainedBox(
         constraints: BoxConstraints(
           maxWidth: dialogMaxWidth,
@@ -225,7 +208,7 @@ class _ItemInfoDialog extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             color: colors.taskCardHeaderBg,
-            borderRadius: AppRadius.circular24,
+            borderRadius: const BorderRadius.all(Radius.circular(24)),
             border: Border.all(color: colors.glowGold, width: borderWidth),
             boxShadow: [
               BoxShadow(
@@ -235,10 +218,8 @@ class _ItemInfoDialog extends StatelessWidget {
               ),
             ],
           ),
-          // ClipRRect — скроллбар и контент не должны вылезать за скруглённые
-          // углы карточки при прокрутке.
           child: ClipRRect(
-            borderRadius: AppRadius.circular24,
+            borderRadius: const BorderRadius.all(Radius.circular(24)),
             child: Stack(
               children: [
                 Padding(
@@ -254,14 +235,14 @@ class _ItemInfoDialog extends StatelessWidget {
                             height: previewSize,
                             child: Image.asset(asset, fit: BoxFit.contain),
                           ),
-                          AppSizedBoxes.verticalSizedBoxH12,
+                          const SizedBox(height: 12),
                           Text(
                             title,
                             textAlign: TextAlign.center,
                             style: theme.appTypography.mobileTypo.p1Med
                                 .copyWith(color: colors.accentGold),
                           ),
-                          AppSizedBoxes.verticalSizedBoxH8,
+                          const SizedBox(height: 8),
                           Text(
                             description,
                             textAlign: TextAlign.center,
@@ -273,8 +254,6 @@ class _ItemInfoDialog extends StatelessWidget {
                     ),
                   ),
                 ),
-                // Отдельным слоем поверх скролла — не прокручивается вместе
-                // с контентом.
                 Positioned(
                   top: closeButtonInset,
                   right: closeButtonInset,
@@ -286,7 +265,7 @@ class _ItemInfoDialog extends StatelessWidget {
                       child: Icon(
                         Icons.close,
                         color: colors.textSecondary,
-                        size: AppSizes.allSize18,
+                        size: 18,
                       ),
                     ),
                   ),

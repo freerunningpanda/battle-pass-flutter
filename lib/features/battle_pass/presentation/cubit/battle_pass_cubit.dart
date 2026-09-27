@@ -5,78 +5,74 @@ import '../../../exports.dart';
 class BattlePassCubit extends Cubit<BattlePassState> {
   BattlePassCubit({
     required GetSeason getSeason,
-    required ClaimReward claimReward,
+    required ClaimLevel claimLevel,
     required ClaimAllRewards claimAllRewards,
+    required DemoScenarioStore demoScenario,
   }) : _getSeason = getSeason,
-       _claimReward = claimReward,
+       _claimLevel = claimLevel,
        _claimAllRewards = claimAllRewards,
+       _demoScenario = demoScenario,
        super(const BattlePassLoading()) {
-    switchScenario(BattlePassScenario.premiumLocked);
+    switchScenario(demoScenario.current);
   }
 
   final GetSeason _getSeason;
-  final ClaimReward _claimReward;
+  final ClaimLevel _claimLevel;
   final ClaimAllRewards _claimAllRewards;
+  final DemoScenarioStore _demoScenario;
 
-  Future<void> switchScenario(BattlePassScenario scenario) async {
-    emit(const BattlePassLoading());
-    final result = await _getSeason(GetSeasonParams(scenario));
-    result.fold(
-      onSuccess: (success) => emit(
-        BattlePassLoaded(
-          season: success.data,
-          scenario: scenario,
-          selectedLevel: success.data.currentLevel,
-        ),
-      ),
-      onFailure: (failure) => emit(BattlePassError(failure.failure.error)),
-    );
-  }
+  /// Действия над сезоном выполняются строго по очереди: каждое берёт
+  /// сезон, уже обновлённый предыдущим.
+  Future<void> _queue = Future.value();
 
-  void selectLevel(int levelNumber) {
-    final current = state;
-    if (current is BattlePassLoaded) {
-      emit(current.copyWith(selectedLevel: levelNumber));
-    }
-  }
+  /// Без промежуточного [BattlePassLoading] — экран не мигает при смене
+  /// сценария, старый сезон остаётся до прихода нового.
+  Future<void> switchScenario(BattlePassScenario scenario) =>
+      _enqueue(() async {
+        _demoScenario.current = scenario;
+        final result = await _getSeason(const NoParams());
+        emit(
+          result.fold(
+            onSuccess: (season) =>
+                BattlePassLoaded(season: season, scenario: scenario),
+            onFailure: (failure) => BattlePassError(failure.message),
+          ),
+        );
+      });
 
-  Future<void> claimReward(
-    int levelNumber, {
-    required bool isPremiumReward,
-  }) async {
-    final current = state;
-    if (current is! BattlePassLoaded) return;
-    final result = await _claimReward(
-      ClaimRewardParams(
-        season: current.season,
-        levelNumber: levelNumber,
-        isPremiumReward: isPremiumReward,
-      ),
-    );
-    result.fold(
-      onSuccess: (success) => emit(current.copyWith(season: success.data)),
-      onFailure: (failure) => emit(BattlePassError(failure.failure.error)),
-    );
-  }
-
-  /// Мок-покупка премиума: реального IAP в задании нет. Переключение
-  /// сценария — источник правды один, так что уровень/трек/премиум-плашки
-  /// остаются согласованными (см. README про мок-схему).
+  /// Мок-покупка премиума: реального IAP нет, переключаем сценарий.
   Future<void> purchasePremium() =>
       switchScenario(BattlePassScenario.premiumUnlockedWithReward);
 
-  /// Мок-"повышение уровня" по кнопке в баннере (см. purchasePremium) — тот
-  /// же принцип: реального прогресса нет, просто переключаем сценарий на
-  /// макс. уровень.
+  /// Мок-повышение уровня: так же переключаем сценарий.
   Future<void> increaseLevel() => switchScenario(BattlePassScenario.maxLevel);
 
-  Future<void> claimAllRewards() async {
+  Future<void> claimLevel(int levelNumber) => _updateSeason(
+    (season) =>
+        _claimLevel(ClaimLevelParams(season: season, levelNumber: levelNumber)),
+  );
+
+  Future<void> claimAllRewards() => _updateSeason(_claimAllRewards.call);
+
+  Future<void> _updateSeason(
+    Future<Result<BattlePassSeason>> Function(BattlePassSeason season) action,
+  ) => _enqueue(() async {
     final current = state;
     if (current is! BattlePassLoaded) return;
-    final result = await _claimAllRewards(current.season);
-    result.fold(
-      onSuccess: (success) => emit(current.copyWith(season: success.data)),
-      onFailure: (failure) => emit(BattlePassError(failure.failure.error)),
+    final result = await action(current.season);
+    emit(
+      result.fold(
+        onSuccess: (season) =>
+            BattlePassLoaded(season: season, scenario: current.scenario),
+        onFailure: (failure) => BattlePassLoaded(
+          season: current.season,
+          scenario: current.scenario,
+          actionError: ActionError(failure.message),
+        ),
+      ),
     );
-  }
+  });
+
+  Future<void> _enqueue(Future<void> Function() task) =>
+      _queue = _queue.then((_) => isClosed ? null : task());
 }

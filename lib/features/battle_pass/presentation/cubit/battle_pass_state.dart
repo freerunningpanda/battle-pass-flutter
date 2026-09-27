@@ -17,25 +17,18 @@ final class BattlePassLoaded extends BattlePassState {
   const BattlePassLoaded({
     required this.season,
     required this.scenario,
-    required this.selectedLevel,
+    this.actionError,
   });
 
   final BattlePassSeason season;
   final BattlePassScenario scenario;
-  final int selectedLevel;
 
-  BattlePassLoaded copyWith({
-    BattlePassSeason? season,
-    BattlePassScenario? scenario,
-    int? selectedLevel,
-  }) => BattlePassLoaded(
-    season: season ?? this.season,
-    scenario: scenario ?? this.scenario,
-    selectedLevel: selectedLevel ?? this.selectedLevel,
-  );
+  /// Ошибка последнего действия (получения наград) — экран остаётся
+  /// загруженным, ошибка показывается разово.
+  final ActionError? actionError;
 
   @override
-  List<Object?> get props => [season, scenario, selectedLevel];
+  List<Object?> get props => [season, scenario, actionError];
 }
 
 final class BattlePassError extends BattlePassState {
@@ -45,4 +38,12 @@ final class BattlePassError extends BattlePassState {
 
   @override
   List<Object?> get props => [message];
+}
+
+/// Сравнивается по ссылке, а не по тексту: одна и та же ошибка дважды
+/// подряд — два разных состояния, и обе показываются.
+final class ActionError {
+  ActionError(this.message);
+
+  final String message;
 }

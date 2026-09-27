@@ -1,9 +1,9 @@
-// Единая точка импорта для файлов lib/core/**: вместо набора относительных
-// путей в каждом файле — один `import '.../exports.dart';` (тот же приём,
-// что и у lib/features/exports.dart).
+// Единая точка импорта для lib/core/**.
 
 // Core
+export 'demo/demo_scenario.dart';
 export 'result/result.dart';
+export 'usecase/use_case.dart';
 
 // DI
 export '../core/di/injection_container.dart';
@@ -13,7 +13,7 @@ export '../features/battle_pass/data/mock/battle_pass_mock_api.dart';
 export '../features/battle_pass/data/repositories/battle_pass_repository_impl.dart';
 export '../features/battle_pass/domain/repositories/battle_pass_repository.dart';
 export '../features/battle_pass/domain/usecases/claim_all_rewards.dart';
-export '../features/battle_pass/domain/usecases/claim_reward.dart';
+export '../features/battle_pass/domain/usecases/claim_level.dart';
 export '../features/battle_pass/domain/usecases/get_season.dart';
 export '../features/battle_pass/presentation/cubit/battle_pass_cubit.dart';
 

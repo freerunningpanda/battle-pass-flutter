@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../exports.dart';
 
+/// Плитка уровня трека с ромбом и линией прогресса до следующего уровня.
 class RewardTile extends StatefulWidget {
   const RewardTile({
     required this.level,
@@ -35,15 +36,10 @@ class RewardTile extends StatefulWidget {
   /// заливку "тут премиум" у уровня с доступным премиум-апгрейдом.
   final bool gold;
 
-  /// Порог опыта следующего по порядку уровня — нужен, чтобы соединительная
-  /// линия трека красилась по реальному прогрессу (currentXp относительно
-  /// порогов), а не по грубому состоянию уровня. `null` для последнего
-  /// уровня трека — линии дальше некуда идти.
+  /// Порог следующего уровня — линия прогресса красится по реальному опыту.
+  /// `null` у последнего уровня: линии дальше нет.
   final int? nextRequiredXp;
 
-  /// Накопленный опыт сезона — нужен, чтобы на тапе по своему текущему
-  /// уровню показать реальную нехватку XP, а не общую фразу (иначе не
-  /// понятно, почему уровень, на который "уже дошли", ещё не открывается).
   final int currentXp;
 
   final VoidCallback onClaim;
@@ -54,9 +50,8 @@ class RewardTile extends StatefulWidget {
 }
 
 class _RewardTileState extends State<RewardTile> {
-  /// Обычная (не премиум) доступная награда изначально выглядит как ещё не
-  /// открытая — рамка и кнопка "Забрать" появляются только после первого
-  /// тапа, а забирает уже второй.
+  /// Доступная награда забирается в два тапа: первый выделяет плитку и
+  /// показывает "Забрать", второй забирает.
   bool _selected = false;
 
   @override
@@ -73,27 +68,14 @@ class _RewardTileState extends State<RewardTile> {
 
     final level = widget.level;
     final reward = level.freeReward;
-    final locked = level.state == LevelState.locked;
     final claimable = level.state == LevelState.claimable;
-    final claimed = level.state == LevelState.claimed;
-    // Свой текущий уровень тоже не забрать — XP на него ещё не набран,
-    // поэтому визуально он ничем не должен отличаться от запертого: тот же
-    // замок вместо картинки. Тап всё равно ведёт на конкретное "не хватает
-    // N XP" через ветку ниже, а не на общее "откроется на N уровне".
-    final visuallyLocked = locked || level.state == LevelState.current;
-    final showPremiumBadge =
-        level.premiumReward != null &&
-        !widget.premiumOwned &&
-        level.premiumReward?.claimed != true;
-    // Корона всегда перевешивает: даже если бесплатная награда сама по себе
-    // claimable, плитку с премиум-апгрейдом нельзя "забрать в два тапа" —
-    // тап по ней должен вести к покупке прокачки, а не показывать "Забрать".
+    final showPremiumBadge = _hasPremiumUpgrade;
+    // Плитка с премиум-апгрейдом ведёт к покупке, а не к получению.
     final showClaimUi = claimable && _selected && !showPremiumBadge;
 
     final tile = RewardCarouselTile(
       asset: reward?.iconAsset ?? _placeholderAsset,
-      // Уровни с доступным премиум-апгрейдом всегда красим в фиолетовый —
-      // тот же цвет, что у fuel в премиум-тизере, это общий язык "тут премиум".
+      // Фиолетовый — общий для экрана цвет "тут премиум".
       gradient: widget.gold
           ? _rarityGradient(colors, RewardRarity.legendary)
           : showPremiumBadge
@@ -101,47 +83,24 @@ class _RewardTileState extends State<RewardTile> {
           : _rarityGradient(colors, reward?.rarity),
       badge: showPremiumBadge && !widget.hidePremiumBadge
           ? RewardBadgeKind.premium
-          : RewardBadgeKind.gift,
-      showBadge:
-          (showPremiumBadge && !widget.hidePremiumBadge) ||
-          widget.highlighted ||
-          !widget.hideGiftBadge,
+          : (widget.highlighted || !widget.hideGiftBadge)
+          ? RewardBadgeKind.gift
+          : null,
       quantityLabel: (reward != null && reward.amount > 1)
           ? '×${reward.amount}'
           : null,
-      borderColor: showClaimUi
-          ? colors.claimReadyBorder
-          : widget.highlighted
-          ? colors.textPrimary
-          : null,
-      showGlow: showClaimUi,
-      claimed: claimed,
-      locked: visuallyLocked,
-      // Плитка всегда кликабельна. Доступная бесплатная награда открывается
-      // в два тапа: первый показывает рамку и кнопку "Забрать", второй —
-      // уже забирает; премиум-плитка сразу ведёт к покупке прокачки, но
-      // только если уровень уже достигнут — запертый ИЛИ текущий уровень
-      // (XP ещё не набран) остаётся запертым независимо от короны, ведёт
-      // к покупке прокачки нельзя раньше, чем сам уровень открылся.
-      onTap: visuallyLocked
-          ? () => _showTapHint(
-              context,
-              locked: locked,
-              claimed: false,
-              requiredXp: level.requiredXp,
+      highlight: showClaimUi
+          ? TileHighlight(
+              colors.claimReadyBorder,
+              glow: TileGlow(
+                color: colors.claimReadyBorder.withValues(alpha: 0.6),
+              ),
             )
-          : showPremiumBadge
-          ? widget.onUnlockPremium
-          : claimable
-          ? (_selected
-                ? widget.onClaim
-                : () => setState(() => _selected = true))
-          : () => _showTapHint(
-              context,
-              locked: locked,
-              claimed: claimed,
-              requiredXp: level.requiredXp,
-            ),
+          : widget.highlighted
+          ? TileHighlight(colors.textPrimary)
+          : null,
+      claimed: level.state == LevelState.claimed,
+      onTap: _onTap,
       footer: showClaimUi ? const _ClaimButton() : null,
     );
 
@@ -149,7 +108,7 @@ class _RewardTileState extends State<RewardTile> {
       mainAxisSize: MainAxisSize.min,
       children: [
         tile,
-        AppSizedBoxes.verticalSizedBoxH12,
+        const SizedBox(height: 12),
         _LevelTrackNode(
           number: level.number,
           requiredXp: level.requiredXp,
@@ -160,24 +119,41 @@ class _RewardTileState extends State<RewardTile> {
     );
   }
 
-  void _showTapHint(
-    BuildContext context, {
-    required bool locked,
-    required bool claimed,
-    required int requiredXp,
-  }) {
-    final missingXp = requiredXp - widget.currentXp;
-    final message = locked
-        ? '${AppStrings.levelLockedHintPrefix}${widget.level.number}'
-              '${AppStrings.levelLockedHintSuffix}'
-        : claimed
-        ? AppStrings.rewardAlreadyClaimedHint
-        : '${AppStrings.levelMissingXpHintPrefix}$missingXp'
-              '${AppStrings.levelMissingXpHintSuffix}';
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+  bool get _hasPremiumUpgrade {
+    final premium = widget.level.premiumReward;
+    return premium != null && !premium.claimed && !widget.premiumOwned;
   }
+
+  void _onTap() {
+    final level = widget.level;
+    switch (level.state) {
+      case LevelState.locked:
+        _showHint(
+          '${AppStrings.levelLockedHintPrefix}${level.number}'
+          '${AppStrings.levelLockedHintSuffix}',
+        );
+      // Текущий уровень ещё не пройден — подсказываем, сколько опыта не
+      // хватает, даже если на нём есть премиум-апгрейд.
+      case LevelState.current:
+        _showHint(
+          '${AppStrings.levelMissingXpHintPrefix}'
+          '${level.requiredXp - widget.currentXp}'
+          '${AppStrings.levelMissingXpHintSuffix}',
+        );
+      case _ when _hasPremiumUpgrade:
+        widget.onUnlockPremium();
+      case LevelState.claimable when _selected:
+        widget.onClaim();
+      case LevelState.claimable:
+        setState(() => _selected = true);
+      case LevelState.claimed:
+        _showHint(AppStrings.rewardAlreadyClaimedHint);
+    }
+  }
+
+  void _showHint(String message) => ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text(message)));
 
   static const _placeholderAsset = AppAssets.imageRewardPlaceholder;
 
@@ -215,9 +191,7 @@ class _RewardTileState extends State<RewardTile> {
       };
 }
 
-/// Плашка "Забрать" на нижнем крае карточки — единственный визуальный
-/// признак того, что награду реально можно взять тапом; без неё плитка
-/// (значок подарка/премиума сам по себе) некликабельна.
+/// Плашка "Забрать" на нижнем крае выбранной плитки.
 class _ClaimButton extends StatelessWidget {
   const _ClaimButton();
 
@@ -232,14 +206,13 @@ class _ClaimButton extends StatelessWidget {
       colors: [colors.claimGreenTop, colors.claimGreenBottom],
     );
 
-    // Сам наклон вокруг общего с карточкой центра накладывает снаружи
-    // RewardCarouselTile (см. footer в reward_carousel_tile.dart) — здесь
-    // только компенсирующий встречный наклон, чтобы текст остался прямым.
+    // Плашку наклоняет RewardCarouselTile; здесь — встречный наклон, чтобы
+    // текст остался прямым.
     return Container(
       alignment: Alignment.center,
       decoration: BoxDecoration(
         gradient: claimGreenGradient,
-        borderRadius: AppRadius.circular14,
+        borderRadius: const BorderRadius.all(Radius.circular(14)),
       ),
       child: Transform(
         alignment: Alignment.center,
@@ -256,12 +229,9 @@ class _ClaimButton extends StatelessWidget {
   }
 }
 
-/// Ромб уровня + соединительная линия трека под плиткой. Каждый узел рисует
-/// ТОЛЬКО отрезок ОТ своего ромба ДО следующего (а не половинки с обеих
-/// сторон) — так фактическая доля прогресса (currentXp относительно порогов
-/// requiredXp двух соседних уровней) кладётся на реальную геометрическую
-/// длину между их центрами, а не на случайную часть её. Соседний узел слева
-/// от своего ромба ничего не рисует — сегмент до него уже нарисован этим.
+/// Ромб уровня и линия прогресса от него до ромба следующего уровня —
+/// целиком, а не половинками с двух сторон, чтобы доля опыта ложилась на
+/// всё расстояние между уровнями.
 class _LevelTrackNode extends StatelessWidget {
   const _LevelTrackNode({
     required this.number,
@@ -274,119 +244,62 @@ class _LevelTrackNode extends StatelessWidget {
   final int requiredXp;
   final int currentXp;
 
-  /// Порог следующего уровня; `null` для последнего уровня трека — рисовать
-  /// отрезок дальше некуда.
   final int? nextRequiredXp;
 
-  /// Расстояние между центрами соседних ромбов: ширина плитки (242) плюс
-  /// ширина разделителя-стрелки между ними (см. `_TrackSeparator`, ~12 —
-  /// определяется её содержимым, явной ширины у неё нет).
-  static const _diamondStride = 254.0;
-
-  /// Ромб 34×34, повёрнутый на 45° — половина его диагонали (34·√2/2), т.е.
-  /// на сколько его левый кончик выступает влево от центра; отрезок обрезан
-  /// примерно на это расстояние до центра следующего ромба, иначе остаток
-  /// (когда прогресс близок к 100%) прячется у него под иконкой.
-  static const _diamondHalfSpan = 24.04;
-
-  /// Толщина линии — половина её нужна отдельно: у ромба острый кончик
-  /// (в точности на _diamondHalfSpan от центра его высота равна нулю), так
-  /// что при стыковке линии ровно с кончиком по бокам виден треугольный
-  /// зазор. Забираемся вглубь ромба ещё на половину толщины линии — там он
-  /// уже достаточно "вырос" по высоте, чтобы полностью перекрыть линию.
-  static const _lineThickness = 10.0;
-
-  /// 45° — угол поворота ромба (и обратный поворот его содержимого).
-  static const _diamondRotationAngle = 0.785398;
-
-  /// Небольшой запас поверх точного расчёта ширины соединительной линии —
-  /// иначе из-за сглаживания пикселей на стыке остаётся тонкий зазор.
-  static const _lineWidthPadding = 2.0;
+  /// Линия заходит под ромб следующего уровня на половину своей толщины —
+  /// у острого кончика ромба иначе виден треугольный зазор; плюс запас на
+  /// сглаживание пикселей на стыке.
+  static const _lineWidth =
+      TrackGeometry.levelExtent -
+      TrackGeometry.diamondHalfSpan +
+      TrackGeometry.lineThickness / 2 +
+      2;
 
   @override
   Widget build(BuildContext context) {
     final theme = context.theme;
     final colors = theme.appColors.mainColors;
 
-    const lineLeft = 121.0; // от центра этой плитки — ровно на ромбе
+    // Линия начинается от центра своего ромба.
+    const lineLeft = TrackGeometry.tileWidth / 2;
 
-    final reached = currentXp >= requiredXp;
-    final ownColor = reached
-        ? colors.trackNodeReached
-        : colors.trackNodeDefault;
+    Color colorFor(int xp) =>
+        currentXp >= xp ? colors.trackNodeReached : colors.trackNodeDefault;
+    final ownColor = colorFor(requiredXp);
+    final next = nextRequiredXp;
 
     return SizedBox(
-      width: AppSizes.horizontalSize242,
-      height: AppSizes.verticalSize34,
+      width: TrackGeometry.tileWidth,
+      height: TrackGeometry.diamondSize,
       child: Stack(
         clipBehavior: Clip.none,
         alignment: Alignment.center,
         children: [
-          if (nextRequiredXp != null)
+          if (next != null)
             Positioned(
               left: lineLeft,
-              width:
-                  _diamondStride -
-                  _diamondHalfSpan +
-                  _lineThickness / 2 +
-                  _lineWidthPadding,
-              child: Builder(
-                builder: (context) {
-                  final nextReached = currentXp >= nextRequiredXp!;
-                  final outColor = nextReached
-                      ? colors.trackNodeReached
-                      : colors.trackNodeDefault;
-                  // currentXp/nextRequiredXp — та же доля, что показана в
-                  // XP-пилюле наверху экрана (см. battle_pass_screen.dart,
-                  // xpToNextLevel = requiredXp текущего уровня), чтобы полоса
-                  // читалась согласованно с тем числом.
-                  final fraction = nextRequiredXp! > 0
-                      ? (currentXp / nextRequiredXp!).clamp(0.0, 1.0)
-                      : (reached ? 1.0 : 0.0);
-                  return DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [ownColor, ownColor, outColor, outColor],
-                        stops: [0, fraction, fraction, 1],
-                      ),
-                    ),
-                    child: AppSizedBoxes.verticalSizedBoxH10,
-                  );
-                },
-              ),
-            ),
-          Transform.rotate(
-            angle: _diamondRotationAngle,
-            child: Container(
-              width: AppSizes.allSize34,
-              height: AppSizes.allSize34,
-              decoration: BoxDecoration(
-                color: ownColor,
-                borderRadius: AppRadius.circular6,
-              ),
-              child: Transform.rotate(
-                angle: -_diamondRotationAngle,
-                child: Center(
-                  child: Padding(
-                    // Трёхзначные уровни (100+) не помещаются в ромб на
-                    // полный fontSize — сжимаем, а не обрезаем цифры.
-                    padding: AppPadding.horizontalPadding3,
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        '$number',
-                        style: theme.appTypography.mobileTypo.bold14.copyWith(
-                          color: colors.appColorWhite,
-                        ),
-                      ),
-                    ),
+              width: _lineWidth,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  // Та же доля, что в XP-индикаторе вверху экрана.
+                  gradient: _progressGradient(
+                    ownColor,
+                    colorFor(next),
+                    next > 0 ? (currentXp / next).clamp(0.0, 1.0) : 1.0,
                   ),
                 ),
+                child: const SizedBox(height: TrackGeometry.lineThickness),
               ),
             ),
-          ),
+          LevelDiamond(number: number, color: ownColor),
         ],
       ),
     );
   }
+
+  static Gradient _progressGradient(Color from, Color to, double fraction) =>
+      LinearGradient(
+        colors: [from, from, to, to],
+        stops: [0, fraction, fraction, 1],
+      );
 }

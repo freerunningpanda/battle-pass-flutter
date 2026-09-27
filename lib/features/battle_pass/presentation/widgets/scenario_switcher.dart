@@ -2,9 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../exports.dart';
 
-/// Служебный dev-контрол переключения моковых сценариев экрана (не часть
-/// макета) — способ переключать состояния экрана, который просит ТЗ.
-/// Свёрнут в плавающую кнопку, чтобы не перекрывать трек наград.
+/// Dev-переключатель сценариев мок-бэкенда (не часть макета).
 class ScenarioSwitcher extends StatefulWidget {
   const ScenarioSwitcher({
     required this.current,
@@ -35,12 +33,7 @@ class _ScenarioSwitcherState extends State<ScenarioSwitcher> {
         AppStrings.devScenarioRewardsEndedPremiumNotOwned,
   };
 
-  // Подсказка на кнопку переключения сценариев — сама кнопка сжата в
-  // маленькую иконку в углу и легко теряется при первом знакомстве с
-  // экраном. Живёт только в памяти State (не персистится) — значит,
-  // показывается заново при каждом полном перезапуске приложения, а не
-  // один раз за всё время, что здесь и нужно: рецензент может перезапускать
-  // приложение по нескольку раз за сессию ревью.
+  // Подсказка к маленькой кнопке — показывается при каждом запуске.
   bool _showHint = true;
 
   void _dismissHint() {
@@ -60,7 +53,7 @@ class _ScenarioSwitcherState extends State<ScenarioSwitcher> {
           child: Align(
             alignment: Alignment.bottomRight,
             child: Padding(
-              padding: AppPadding.allPadding12,
+              padding: const EdgeInsets.all(12),
               child: PopupMenuButton<BattlePassScenario>(
                 initialValue: widget.current,
                 onSelected: widget.onChanged,
@@ -72,10 +65,10 @@ class _ScenarioSwitcherState extends State<ScenarioSwitcher> {
                       child: Row(
                         children: [
                           if (scenario == widget.current)
-                            const Icon(Icons.check, size: AppSizes.allSize18)
+                            const Icon(Icons.check, size: 18)
                           else
-                            AppSizedBoxes.horizontalSizedBoxW18,
-                          AppSizedBoxes.horizontalSizedBoxW8,
+                            const SizedBox(width: 18),
+                          const SizedBox(width: 8),
                           Flexible(
                             child: Text(
                               _labels[scenario] ?? scenario.name,
@@ -87,7 +80,7 @@ class _ScenarioSwitcherState extends State<ScenarioSwitcher> {
                     ),
                 ],
                 child: Container(
-                  padding: AppPadding.allPadding12,
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: colors.appColorBlack.withValues(
                       alpha: buttonBgAlpha,
@@ -110,9 +103,7 @@ class _ScenarioSwitcherState extends State<ScenarioSwitcher> {
   }
 }
 
-/// Затемнение всего экрана + выноска со стрелкой на кнопку переключения
-/// сценариев — показывается поверх всего остального контента, пока не
-/// снята тапом в любом месте.
+/// Затемнение экрана и выноска со стрелкой на кнопку; снимается тапом.
 class _ScenarioSwitcherHint extends StatelessWidget {
   const _ScenarioSwitcherHint({required this.onDismiss});
 
@@ -130,13 +121,9 @@ class _ScenarioSwitcherHint extends StatelessWidget {
     const bubbleGlowBlurRadius = 20.0;
     const bubbleGlowSpreadRadius = 1.0;
     const calloutRight = 12.0;
-    // Ниже нижнего края самой кнопки (12 внешний паддинг + ~46 диаметр
-    // круга) — чтобы стрелка-указатель между выноской и кнопкой не
-    // накладывалась на саму кнопку.
     const calloutBottom = 74.0;
     const arrowSize = 32.0;
-    // Стрелка заходит под нижний край рамки бабла — чтобы шов между ними не
-    // читался как отдельная деталь, а выноска выглядела цельной "капелькой".
+    // Стрелка заходит под рамку, чтобы не было видно шва.
     const arrowOverlap = -4.0;
 
     return Positioned.fill(
@@ -163,7 +150,9 @@ class _ScenarioSwitcherHint extends StatelessWidget {
                           padding: bubblePadding,
                           decoration: BoxDecoration(
                             color: colors.taskCardHeaderBg,
-                            borderRadius: AppRadius.circular24,
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(24),
+                            ),
                             border: Border.all(
                               color: colors.glowGold,
                               width: bubbleBorderWidth,

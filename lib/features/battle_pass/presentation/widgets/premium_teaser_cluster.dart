@@ -2,13 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../exports.dart';
 
-/// Блок из 3 премиум-наград в начале трека (узел "Frame 1539", id 1:1275) +
-/// плашка "Получи все сразу!" (Premium_Awards_Stiker, id 1:1297) под ним.
-/// Награды этого блока взять нельзя напрямую — плашка "продаёт" премиум:
-/// тап переключает сценарий на "премиум куплен" (см. README про мок-покупку),
-/// после чего блок пропадает — он не имеет смысла, когда премиум уже куплен.
-/// Сами иконки кликабельны — можно выбрать (подсветить), какая из наград
-/// интересна, ровно один элемент одновременно.
+/// Три премиум-награды в начале трека и плашка "Получи все сразу!", которая
+/// ведёт к покупке премиума. Награды можно выделять по одной.
 class PremiumTeaserCluster extends StatefulWidget {
   const PremiumTeaserCluster({
     required this.onUnlock,
@@ -46,9 +41,7 @@ class _PremiumTeaserClusterState extends State<PremiumTeaserCluster> {
     const stickerLeft = 6.0;
     const stickerTop = 236.0;
 
-    // Фоновые градиенты плиток тизера — по редкости: common / rare / epic
-    // (тот же порядок, что и у RewardTile, см. AppColors.rewardTile*Gradient
-    // до перехода на тему).
+    // Градиенты по редкости: common, rare, epic.
     final gradients = [
       LinearGradient(
         begin: Alignment.topCenter,
@@ -91,16 +84,17 @@ class _PremiumTeaserClusterState extends State<PremiumTeaserCluster> {
                 asset: _assets[i],
                 quantityLabel: _quantityLabels[i],
                 gradient: gradients[i],
-                badge: RewardBadgeKind.premium,
-                showBadge: !widget.hidePremiumBadge,
-                borderColor: _selectedIndex == i ? colors.textPrimary : null,
+                badge: widget.hidePremiumBadge ? null : RewardBadgeKind.premium,
+                highlight: _selectedIndex == i
+                    ? TileHighlight(colors.textPrimary)
+                    : null,
                 onTap: () => setState(() => _selectedIndex = i),
               ),
             ),
           Positioned(
             left: stickerLeft,
             top: stickerTop,
-            width: AppSizes.horizontalSize626,
+            width: 626,
             child: _UnlockSticker(onTap: widget.onUnlock),
           ),
         ],
@@ -126,16 +120,16 @@ class _UnlockSticker extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: SizedBox(
-          height: AppSizes.verticalSize60,
+          height: 60,
           child: Stack(
             alignment: Alignment.center,
             children: [
               SkewedBox(
-                width: AppSizes.horizontalSize626,
-                height: AppSizes.verticalSize60,
+                width: 626,
+                height: 60,
                 decoration: BoxDecoration(
                   color: colors.unlockStickerBg,
-                  borderRadius: AppRadius.circular20,
+                  borderRadius: const BorderRadius.all(Radius.circular(20)),
                 ),
               ),
               Text(
